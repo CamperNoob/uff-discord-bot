@@ -1,0 +1,1 @@
+DiscordToken = '' #Discord developers -> App -> Bot -> TOKEN
