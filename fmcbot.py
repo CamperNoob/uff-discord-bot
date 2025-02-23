@@ -3,6 +3,9 @@ import logging
 from tokens import DiscordToken
 from monitorlist import targets
 
+logger = logging.getLogger("discord")
+logger.setLevel(logging.INFO)
+
 handler = logging.FileHandler(filename='bot.log', encoding='utf-8', mode='w')
 
 intents = discord.Intents.default()
@@ -27,7 +30,7 @@ async def on_message(message):
         for key, value in targets.items():
             try:
                 tempstorage = await client.fetch_user(value)
-                userstatuses.append(temp_storage)
+                userstatuses.append(tempstorage)
             except discord.NotFound as e:
                 logger.warning(f"User {key}:{value} not found, skipping.")
                 continue
@@ -43,4 +46,4 @@ async def on_message(message):
             await message.channel.send(f'entry {value.display_name}')
         print(f'Sent user names from targets list')
 
-client.run(DiscordToken, log_handler=handler, log_level=logging.DEBUG)
+client.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
