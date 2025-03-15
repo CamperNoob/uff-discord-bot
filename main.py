@@ -113,8 +113,8 @@ async def missing_voice(ctx: discord.Interaction, message_link: str, voice_name:
         
         await ctx.guild.chunk()
 
-        voice_channel_names = [vc.name for vc in guild.voice_channels]
-        matches = difflib.get_close_matches(voice_name, voice_channel_names, n=3, cutoff=0.5)
+        voice_channel_names = {vc.name.lower():vc.name for vc in guild.voice_channels}
+        matches = difflib.get_close_matches(voice_name.lower(), voice_channel_names.keys(), n=3, cutoff=0.5)
         if not matches:
             await ctx.response.send_message(f"{MISSING_VOICE_ERROR_NO_CHANNEL_MATCHES}: **{voice_name}**.", ephemeral=True)
             return
@@ -123,7 +123,7 @@ async def missing_voice(ctx: discord.Interaction, message_link: str, voice_name:
             await ctx.response.send_message(f"{MISSING_VOICE_ERROR_MULTIPLE_MATCHES_FIRST}:\n{options}\n{MISSING_VOICE_ERROR_MULTIPLE_MATCHES_SECOND}.", ephemeral=True)
             return
         elif len(matches) == 1:
-            channel_name = matches[0]
+            channel_name = voice_channel_names[matches[0]]
         voice_channel = discord.utils.get(guild.voice_channels, name=channel_name)
         connected_ids = [member.id for member in voice_channel.members]
 
