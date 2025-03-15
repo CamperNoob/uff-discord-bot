@@ -1,6 +1,7 @@
-ERROR_GENERIC = "Помилка"
+ERROR_GENERIC = "**Помилка**"
 ERROR_NOT_APPOLO = f"{ERROR_GENERIC}: повідомлення не від Apollo бота"
 SYNCED = "Команди синхронізовані"
+ERROR_WRONG_URL = f"{ERROR_GENERIC}: надане посилання не виглядає правильним"
 
 MISSING_MENTIONS_COMMAND_DESCRIPTION = "Повертає теги мемберів ролі які не проставили реакцію на подію Apollo бота"
 MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION = "Посилання на повідомлення події від Apollo"

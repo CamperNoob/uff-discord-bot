@@ -1,6 +1,7 @@
-ERROR_GENERIC = "Error"
+ERROR_GENERIC = "**Error**"
 ERROR_NOT_APPOLO = f"{ERROR_GENERIC}: provided message not from Apollo bot"
 SYNCED = "Commands synced"
+ERROR_WRONG_URL = f"{ERROR_GENERIC}: provided url doesn't look correct"
 
 MISSING_MENTIONS_COMMAND_DESCRIPTION = "Returns mentions of members of a role that did not react to Apollo event"
 MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION = "URL to Apollo message with event"

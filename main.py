@@ -8,7 +8,7 @@ from translations.ua import *
 logger = logging.getLogger("discord")
 logger.setLevel(logging.INFO)
 
-handler = logging.FileHandler(filename='bot.log', encoding='utf-8', mode='w')
+handler = logging.FileHandler(filename='botlogger.log', encoding='utf-8', mode='w')
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -20,12 +20,12 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
+    logger.info(f'Logged in as {bot.user}')
     try:
         synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} commands.")
+        logger.info(f"Synced {len(synced)} commands.")
     except Exception as e:
-        print(f"Error syncing commands: {e}")
+        logger.info(f"Error syncing commands: {e}")
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
@@ -35,9 +35,13 @@ async def on_ready():
 @commands.has_permissions(administrator=True)
 async def missing_mentions(ctx: discord.Interaction, message_link: str, role: discord.Role):
     logger.info(f"Received missing_mentions: {message_link}, {role.name}, from user: {ctx.user.name} <@{ctx.user.id}>")
-    print(f"Received missing_mentions: {message_link}, {role.name}, from user: {ctx.user.name} <@{ctx.user.id}>")
     try:
         parts = message_link.split('/')
+        parts = message_link.split('/')
+        if (not parts or len(parts) < 7):
+            await ctx.response.send_message(f"{ERROR_WRONG_URL}: {message_link}", ephemeral=True)
+            return
+        
         guild_id = int(parts[4])
         channel_id = int(parts[5])
         message_id = int(parts[6])
@@ -56,7 +60,7 @@ async def missing_mentions(ctx: discord.Interaction, message_link: str, role: di
         role_members = [member.id for member in role.members]
 
         if not role_members:
-            await ctx.response.send_message(f"{MISSING_MENTIONS_ERROR_NO_MEMBERS}.", ephemeral=True)
+            await ctx.response.send_message(f"{MISSING_MENTIONS_ERROR_NO_MEMBERS}: **{role.name}**.", ephemeral=True)
             return
 
         for field in message.embeds[0].fields:
@@ -75,7 +79,7 @@ async def missing_mentions(ctx: discord.Interaction, message_link: str, role: di
 
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        print(f"{ERROR_GENERIC}: {e}")
+        logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; {type(role)}")
 
 @bot.command()
 async def sync(ctx):
@@ -89,9 +93,12 @@ async def sync(ctx):
 )
 async def missing_voice(ctx: discord.Interaction, message_link: str, voice_name: str):
     logger.info(f"Received missing_voice: {message_link}, {voice_name}, from user: {ctx.user.name} <@{ctx.user.id}>")
-    print(f"Received missing_voice: {message_link}, {voice_name}, from user: {ctx.user.name} <@{ctx.user.id}>")
     try:
         parts = message_link.split('/')
+        if (not parts or len(parts) < 7):
+            await ctx.response.send_message(f"{ERROR_WRONG_URL}: {message_link}", ephemeral=True)
+            return
+
         guild_id = int(parts[4])
         channel_id = int(parts[5])
         message_id = int(parts[6])
@@ -109,7 +116,7 @@ async def missing_voice(ctx: discord.Interaction, message_link: str, voice_name:
         voice_channel_names = [vc.name for vc in guild.voice_channels]
         matches = difflib.get_close_matches(voice_name, voice_channel_names, n=3, cutoff=0.5)
         if not matches:
-            await ctx.response.send_message(f"{MISSING_VOICE_ERROR_NO_CHANNEL_MATCHES}.", ephemeral=True)
+            await ctx.response.send_message(f"{MISSING_VOICE_ERROR_NO_CHANNEL_MATCHES}: **{voice_name}**.", ephemeral=True)
             return
         if len(matches) > 1:
             options = "\n".join(f"- `{match}`" for match in matches)
@@ -131,7 +138,6 @@ async def missing_voice(ctx: discord.Interaction, message_link: str, voice_name:
 
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.error(f"{ERROR_GENERIC}: {e}")
-        print(f"{ERROR_GENERIC}: {e}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; {voice_name}")
 
-bot.run(DiscordToken, log_handler=handler, log_level=logging.WARNING)
+bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
