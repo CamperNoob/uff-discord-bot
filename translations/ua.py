@@ -1,0 +1,8 @@
+COMMAND_DESCRIPTION = "Повертає теги мемберів ролі які не проставили реакцію на подію Apollo бота"
+MESSAGE_LINK_DESCRIPTION = "Посилання на повідомлення події від Apollo"
+ROLE_DESCRIPTION = "Тег ролі, мемберів якої перевіряємо на проставлені реакції"
+ERROR_GENERIC = "Помилка"
+ERROR_NOT_APPOLO = f"{ERROR_GENERIC}: повідомлення не від Apollo бота"
+ERROR_NO_MEMBERS = f"{ERROR_GENERIC}: provided role has no members"
+RESPONSE_SUCCESS = "- відсутні реакції від"
+SYNCED = "Команди синхронізовані"

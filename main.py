@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import logging
 from tokens import DiscordToken
+from translations.ua import *
 
 logger = logging.getLogger("discord")
 logger.setLevel(logging.INFO)
@@ -25,10 +26,10 @@ async def on_ready():
     except Exception as e:
         print(f"Error syncing commands: {e}")
 
-@bot.tree.command(name="missing_mentions", description="Повертає теги мемберів ролі які не проставили реакцію на подію Apollo бота.")
+@bot.tree.command(name="missing_mentions", description=f"{COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
-    message_link="Посилання на повідомлення події від Apollo.",
-    role="Тег ролі, мемберів якої перевіряємо на проставлені реакції."
+    message_link=f"{MESSAGE_LINK_DESCRIPTION}.",
+    role=f"{ROLE_DESCRIPTION}."
 )
 @commands.has_permissions(administrator=True)
 async def missing_mentions(ctx: discord.Interaction, message_link: str, role: discord.Role):
@@ -43,7 +44,7 @@ async def missing_mentions(ctx: discord.Interaction, message_link: str, role: di
         message = await channel.fetch_message(message_id)
 
         if message.author.id != 475744554910351370:
-            await ctx.response.send_message(f"Error: provided message is not from Apollo bot.")
+            await ctx.response.send_message(f"{ERROR_NOT_APPOLO}.")
             return
         
         event_mentions = []
@@ -53,7 +54,7 @@ async def missing_mentions(ctx: discord.Interaction, message_link: str, role: di
         role_members = [member.id for member in role.members]
 
         if not role_members:
-            await ctx.response.send_message(f"Error: provided role has no members.")
+            await ctx.response.send_message(f"{ERROR_NO_MEMBERS}.")
             return
 
         for field in message.embeds[0].fields:
@@ -67,14 +68,14 @@ async def missing_mentions(ctx: discord.Interaction, message_link: str, role: di
         for reaction in missing_reactions_list:
             missing_reactions_str = f"{missing_reactions_str}<@{reaction}>\n"
 
-        await ctx.response.send_message(f"In {message_link} missing reactions from:\n{missing_reactions_str}")
+        await ctx.response.send_message(f"{message_link} {RESPONSE_SUCCESS}:\n{missing_reactions_str}")
 
     except Exception as e:
-        await ctx.response.send_message(f"Error: {e}")
+        await ctx.response.send_message(f"{ERROR_GENERIC}: {e}")
 
 @bot.command()
 async def sync(ctx):
     await bot.tree.sync()
-    await ctx.send("Commands synced.")
+    await ctx.send(f"{SYNCED}.")
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.WARNING)

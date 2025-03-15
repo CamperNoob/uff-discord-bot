@@ -1,0 +1,8 @@
+COMMAND_DESCRIPTION = "Returns mentions of members of a role that did not react to Apollo event"
+MESSAGE_LINK_DESCRIPTION = "URL to Apollo message with event"
+ROLE_DESCRIPTION = "Mention members of a role to check reactions to event from"
+ERROR_GENERIC = "Error"
+ERROR_NOT_APPOLO = f"{ERROR_GENERIC}: повідомлення не від Apollo бота"
+ERROR_NO_MEMBERS = f"{ERROR_GENERIC}: provided role has no members"
+RESPONSE_SUCCESS = "- missing reactions from"
+SYNCED = "Commands synced"
