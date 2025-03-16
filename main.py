@@ -94,14 +94,23 @@ async def fetch_message_from_url(ctx: discord.Interaction, message_link):
         message = await channel.fetch_message(message_id)
         return message
     except discord.NotFound:
-        await ctx.followup.send(f"{ERROR_MESSAGE_NOT_FOUND}: {message_link}", ephemeral=True)
+        try:
+            await ctx.followup.send(f"{ERROR_MESSAGE_NOT_FOUND}: {message_link}", ephemeral=True)
+        except Exception as ee:
+            logger.error(f"{ERROR_GENERIC}: {ee}; traceback: {traceback.format_exc()}")
         return None
     except discord.Forbidden:
-        await ctx.followup.send(f"{ERROR_NO_PERMISSION} **{channel.name}**.", ephemeral=True)
+        try:
+            await ctx.followup.send(f"{ERROR_NO_PERMISSION} **{channel.name}**.", ephemeral=True)
+        except Exception as ee:
+            logger.error(f"{ERROR_GENERIC}: {ee}; traceback: {traceback.format_exc()}")
         return None
     except Exception as e:
-        await ctx.followup.send(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.error(f"{ERROR_GENERIC}: {e}")
+        try:
+            await ctx.followup.send(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        except Exception as ee:
+            logger.error(f"{ERROR_GENERIC}: {ee}; traceback: {traceback.format_exc()}")
+        logger.error(f"{ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
         return None
 
 @bot.event
