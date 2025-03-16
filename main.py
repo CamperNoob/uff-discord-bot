@@ -122,7 +122,7 @@ async def on_ready():
 async def missing_mentions(ctx: discord.Interaction, message_link: str, role: discord.Role):
     logger.info(f"Received missing_mentions: {message_link}, {role.name}, from user: {ctx.user.name} <@{ctx.user.id}>")
     try:
-        message = await fetch_message_from_url(ctx)
+        message = await fetch_message_from_url(ctx, message_link)
         if not message:
             return
         if message.author.id != 475744554910351370:
