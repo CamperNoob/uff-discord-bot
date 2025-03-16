@@ -326,10 +326,10 @@ async def generate_roster(ctx: discord.Interaction,  message_link: str):
         if return_text:
             await ctx.response.send_message(f"{GENERATE_ROSTER_SUCCESS}:\n{'\n'.join(return_text)}")
         else:
-            await ctx.response.send_message(f"{GENERATE_ROSTER_FAILED}:{roster_string}")
+            await ctx.response.send_message(f"{GENERATE_ROSTER_FAILED}:{message_link}")
         return
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.error(f"{ERROR_GENERIC}: {e}; args: {roster_string}; traceback: {traceback.format_exc()}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; traceback: {traceback.format_exc()}")
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
