@@ -3,6 +3,8 @@ from discord.ext import commands
 import logging
 from tokens import DiscordToken
 import difflib
+import traceback
+from collections import defaultdict
 from translations.ua import *
 
 logger = logging.getLogger("discord")
@@ -38,7 +40,6 @@ class missingVoiceChannelButton(discord.ui.Button):
         self.view.result = self.label
         await interaction.response.edit_message(content=f"{MISSING_VOICE_SELECTED_CHANNEL}: **{self.label}**", view=None)
         self.view.stop()
-        #await missing_voice_handler(self.view.ctx, self.label)
         await missing_voice_handler(interaction, self.label, self.view.message_link)
 
 class missingVoiceCancelButton(discord.ui.Button):
@@ -62,7 +63,7 @@ async def missing_voice_handler(ctx: discord.Interaction, channel_name: str, mes
             return
         mentioned_ids = [mention.id for mention in message.mentions]
         if not mentioned_ids:
-            await ctx.followup.send(f"{MISSING_VOICE_ERROR_NO_MEMBERS}", ephemeral=True)
+            await ctx.followup.send(f"{MISSING_VOICE_ERROR_NO_MEMBERS}: {message_link}", ephemeral=True)
             return
         missing_members = set(mentioned_ids) - set(connected_ids)
         if not missing_members:
@@ -75,7 +76,6 @@ async def missing_voice_handler(ctx: discord.Interaction, channel_name: str, mes
         logger.error(f"{ERROR_GENERIC}: {e}")
 
 async def fetch_message_from_url(ctx: discord.Interaction, message_link):
-    #message_link = ctx.namespace.message_link
     try:
         if not message_link:
             raise ValueError("Message link is missing")
@@ -115,18 +115,27 @@ async def on_ready():
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
-    message_link=f"{MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION}.",
-    role=f"{MISSING_MENTIONS_ROLE_DESCRIPTION}."
+    role=f"{MISSING_MENTIONS_ROLE_DESCRIPTION}.",
+    message_link=f"{MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION}."
 )
 @commands.has_permissions(administrator=True)
-async def missing_mentions(ctx: discord.Interaction, message_link: str, role: discord.Role):
+async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message_link: str = None):
     logger.info(f"Received missing_mentions: {message_link}, {role.name}, from user: {ctx.user.name} <@{ctx.user.id}>")
+    apollo_id = 475744554910351370
     try:
+        if not message_link:
+            async for message in ctx.channel.history(limit=None):
+                if message.author.id == apollo_id:
+                    message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
+                    break
+            if not message_link:
+                await ctx.response.send_message(f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_MENTIONS_CANNOT_FIND_APOLLO_MESSAGE}.", ephemeral=True)
+                return
         message = await fetch_message_from_url(ctx, message_link)
         if not message:
             return
-        if message.author.id != 475744554910351370:
-            await ctx.response.send_message(f"{ERROR_NOT_APPOLO}.", ephemeral=True)
+        if message.author.id != apollo_id:
+            await ctx.response.send_message(f"{ERROR_NOT_APPOLO}: {message_link}", ephemeral=True)
             return
         event_mentions = []
         await ctx.guild.chunk()
@@ -141,13 +150,13 @@ async def missing_mentions(ctx: discord.Interaction, message_link: str, role: di
             event_mentions.extend([int(m) for m in mentions.split('\n') if m])
         missing_reactions_list = set(role_members) - set(event_mentions)
         if not missing_reactions_list:
-            await ctx.response.send_message(f"{MISSING_MEMBERS_ALL_REACTED} {message_link}.", ephemeral=True)
+            await ctx.response.send_message(f"{MISSING_MENTIONS_MEMBERS_ALL_REACTED} {message_link}.", ephemeral=True)
             return
         missing_reactions_str = "\n".join(f"<@{reaction}>" for reaction in missing_reactions_list)
         await ctx.response.send_message(f"{message_link} {MISSING_MENTIONS_RESPONSE_SUCCESS}:\n{missing_reactions_str}")
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; {type(role)}")
+        logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; {type(role)}; traceback: {traceback.format_exc()}")
 
 @bot.command()
 async def sync(ctx):
@@ -156,12 +165,21 @@ async def sync(ctx):
 
 @bot.tree.command(name="missing_voice", description=f"{MISSING_VOICE_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
-    message_link=f"{MISSING_VOICE_MESSAGE_LINK_DESCRIPTION}.",
-    voice_name=f"{MISSING_VOICE_CHANNEL_NAME_DESCRIPTION}."
+    voice_name=f"{MISSING_VOICE_CHANNEL_NAME_DESCRIPTION}.",
+    message_link=f"{MISSING_VOICE_MESSAGE_LINK_DESCRIPTION}."
+    
 )
-async def missing_voice(ctx: discord.Interaction, message_link: str, voice_name: str):
-    logger.info(f"Received missing_voice: {message_link}, {voice_name}, from user: {ctx.user.name} <@{ctx.user.id}>")
+async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link: str = None):
+    logger.info(f"Received missing_voice: {voice_name}, {message_link}, from user: {ctx.user.name} <@{ctx.user.id}>")
     try:
+        if not message_link:
+            async for message in ctx.channel.history(limit=None):
+                if message.content.startswith("~"):
+                    message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
+                    break
+            if not message_link:
+                await ctx.response.send_message(f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_VOICE_CANNOT_FIND_MESSAGE}.", ephemeral=True)
+                return
         await ctx.guild.chunk()
         voice_channel_names = {vc.name.lower().replace(' ', '_'):vc.name for vc in ctx.guild.voice_channels}
         matches = difflib.get_close_matches(voice_name.lower().replace(' ', '_'), voice_channel_names.keys(), n=3, cutoff=0.5)
@@ -182,6 +200,127 @@ async def missing_voice(ctx: discord.Interaction, message_link: str, voice_name:
             await missing_voice_handler(ctx, channel_name, message_link)
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; {voice_name}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; {voice_name}; traceback: {traceback.format_exc()}")
+
+@bot.tree.command(name="generate_roster", description=f"{GENERATE_ROSTER_COMMAND_DESCRIPTION}.")
+@discord.app_commands.describe(
+    message_link=f"{GENERATE_ROSTER_PARAMETER_DESCRIPTION}."
+    
+)
+@commands.has_permissions(administrator=True)
+async def generate_roster(ctx: discord.Interaction,  message_link: str):
+    guild = ctx.guild
+    emoji_map = {
+        'sl':discord.utils.get(guild.emojis, name='role_sl') or 'SL',
+        'engi':discord.utils.get(guild.emojis, name='role_engi') or 'Engineer',
+        'rifl':discord.utils.get(guild.emojis, name='role_rifleman') or 'Rifleman',
+        'rifleman':discord.utils.get(guild.emojis, name='role_rifleman') or 'Rifleman',
+        'pilot':discord.utils.get(guild.emojis, name='role_pilot') or 'Pilot',
+        'mortar':discord.utils.get(guild.emojis, name='role_mortar') or 'Mortar',
+        'mg':discord.utils.get(guild.emojis, name='role_mg') or 'MG',
+        'hmg':discord.utils.get(guild.emojis, name='role_mg') or 'MG',
+        'medic':discord.utils.get(guild.emojis, name='role_medic') or 'Medic',
+        'med':discord.utils.get(guild.emojis, name='role_medic') or 'Medic',
+        'sniper':discord.utils.get(guild.emojis, name='role_marksman') or 'Marksman',
+        'marksman':discord.utils.get(guild.emojis, name='role_marksman') or 'Marksman',
+        'lat':discord.utils.get(guild.emojis, name='role_lat') or 'LAT',
+        'hat':discord.utils.get(guild.emojis, name='role_hat') or 'HAT',
+        'gp':discord.utils.get(guild.emojis, name='role_gp') or 'GP',
+        'sap':discord.utils.get(guild.emojis, name='role_sapper') or 'Sapper',
+        'sapper':discord.utils.get(guild.emojis, name='role_sapper') or 'Sapper',
+        'crewman':discord.utils.get(guild.emojis, name='role_crewman') or 'Crewman',
+        'crew':discord.utils.get(guild.emojis, name='role_crewman') or 'Crewman',
+        'cr':discord.utils.get(guild.emojis, name='role_crewman') or 'Crewman',
+        'autorifl':discord.utils.get(guild.emojis, name='role_autorifleman') or 'Automatic Rifleman',
+        'autorifleman':discord.utils.get(guild.emojis, name='role_autorifleman') or 'Automatic Rifleman',
+        'scout':discord.utils.get(guild.emojis, name='role_scout') or 'Scout',
+        'ifv':discord.utils.get(guild.emojis, name='map_wheelifv') or 'IFV',
+        'tank':discord.utils.get(guild.emojis, name='map_tank') or 'Tank',
+        'truck':discord.utils.get(guild.emojis, name='map_truck') or 'Truck',
+        'peh':discord.utils.get(guild.emojis, name='map_truck') or 'Truck',
+        'logi':discord.utils.get(guild.emojis, name='map_logitruck') or 'Logi',
+        'rws':discord.utils.get(guild.emojis, name='map_jeeprws') or 'RWS',
+        'mrap':discord.utils.get(guild.emojis, name='map_jeep') or 'MRAP',
+        'heli':discord.utils.get(guild.emojis, name='map_heli') or 'Helicopter',
+        'helicopter':discord.utils.get(guild.emojis, name='map_heli') or 'Helicopter',
+        'boat':discord.utils.get(guild.emojis, name='map_boat') or 'Boat',
+        'orange':'🟧',
+        'оранж':'🟧',
+        'оранжевий':'🟧',
+        'black':'⬛',
+        'чорний':'⬛',
+        'brown':'🟫',
+        'коричневий':'🟫',
+        'purp':'🟪',
+        'purple':'🟪',
+        'фіолетовий':'🟪',
+        'red':'🟥',
+        'червоний':'🟥',
+        'черв':'🟥',
+        'white':'⬜',
+        'білий':'⬜',
+        'blue':'🟦',
+        'синій':'🟦',
+        'голубий':'🟦',
+        'блакитний':'🟦',
+        'green':'🟩',
+        'зелений':'🟩',
+        'зел':'🟩',
+        'yellow':'🟨',
+        'жовтий':'🟨'
+    }
+    try:
+        await guild.chunk()
+        message = await fetch_message_from_url(ctx, message_link)
+        guild_discord_members = guild.members
+        guild_members = {member.display_name.lower():member.id for member in guild_discord_members}
+        guild_members_display_names = defaultdict(list)
+        for member in guild_discord_members:
+            guild_members_display_names[member.display_name.lower()].append(member.id)
+        {member.display_name.lower():member.id for member in guild.members}
+        roster_string_list = message.content.split('\n')
+        return_text = []
+        for line in roster_string_list:
+            if not line:
+                continue
+            linesplit = line.split(';')
+            line_list = []
+            for item in linesplit:
+                if item.startswith('@'):
+                    member_id = guild_members.get(item[1:].lower())
+                    if member_id:
+                        line_list.append(f"<@{member_id}> ")
+                    else:
+                        matches = guild_members_display_names.get(item[1:].lower())
+                        if not matches:
+                            line_list.append(f"{item} ")
+                        elif len(matches) == 1:
+                            line_list.append(f"<@{matches[0]}> ")
+                        else:
+                            multiple_matches = "|".join([f'<@{id}>' for id in matches])
+                            line_list.append(f"{multiple_matches} ")    
+                elif item.startswith('<@') and item.endswith('>'):
+                    line_list.append(f"{item} ")
+                elif item.startswith('~'):
+                    color_value = emoji_map.get(item[1:].lower())
+                    if color_value:
+                        line_list.append(f"\n**{item[1:]}** {color_value} ")
+                    else:
+                        line_list.append(f"**{item[1:]}** ")
+                else:
+                    value_str = emoji_map.get(item.lower())
+                    if value_str:
+                        line_list.append(f"{value_str} ")
+                    else:
+                        line_list.append(f"{item} ")
+            return_text.append(" ".join(line_list))
+        if return_text:
+            await ctx.response.send_message(f"{GENERATE_ROSTER_SUCCESS}:\n{'\n'.join(return_text)}")
+        else:
+            await ctx.response.send_message(f"{GENERATE_ROSTER_FAILED}:{roster_string}")
+        return
+    except Exception as e:
+        await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {roster_string}; traceback: {traceback.format_exc()}")
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
