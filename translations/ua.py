@@ -14,6 +14,7 @@ MISSING_MENTIONS_ERROR_NO_MEMBERS = f"{ERROR_GENERIC}: вказана роль �
 MISSING_MENTIONS_MEMBERS_ALL_REACTED = "Всі мембери ролі проставили реакцію на подію"
 MISSING_MENTIONS_RESPONSE_SUCCESS = "- відсутні реакції від"
 MISSING_MENTIONS_CANNOT_FIND_APOLLO_MESSAGE = "повідомленням про івент від Apollo"
+MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION = "(Додаткова роль)"
 
 MISSING_VOICE_COMMAND_DESCRIPTION = "Повертає теги мемберів з повідомлення які не зайшли у вказаний голосовий канал"
 MISSING_VOICE_MESSAGE_LINK_DESCRIPTION = "Посилання на повідомлення. Пусте - пошук повідомлення з ~ на початку"
@@ -35,3 +36,8 @@ GENERATE_ROSTER_COMMAND_DESCRIPTION = "Генерує склад з тексту
 GENERATE_ROSTER_PARAMETER_DESCRIPTION = "Посилання на повідомлення з ростером для генерації"
 GENERATE_ROSTER_SUCCESS = "Згенерований склад"
 GENERATE_ROSTER_FAILED = "Не вдалося згенерувати склад з тексту"
+
+PING_TENTATIVE_COMMAND_DESCRIPTION = 'Повертає теги мемберів які проставили "Під питанням" реакцію на подію Apollo бота'
+PING_TENTATIVE_MESSAGE_LINK_DESCRIPTION = "Посилання на повідомлення від Apollo. Пусте - пошук повідомлення від Apollo"
+PING_TENTATIVE_RESPONSE_SUCCESS = 'Будь-ласка, оновіть ваші ❔"Під питанням" реакції'
+PING_TENTATIVE_MENTIONS_MEMBERS_ALL_REACTED = '❔"Під питанням" реакції відсутні'

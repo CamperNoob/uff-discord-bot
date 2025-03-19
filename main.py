@@ -125,15 +125,17 @@ async def on_ready():
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
     role=f"{MISSING_MENTIONS_ROLE_DESCRIPTION}.",
-    message_link=f"{MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION}."
+    message_link=f"{MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION}.",
+    role2=f"{MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION} {MISSING_MENTIONS_ROLE_DESCRIPTION}.",
+    role3=f"{MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION} {MISSING_MENTIONS_ROLE_DESCRIPTION}.",
 )
 @commands.has_permissions(administrator=True)
-async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message_link: str = None):
-    logger.info(f"Received missing_mentions: {message_link}, {role.name}, from user: {ctx.user.name} <@{ctx.user.id}>")
+async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message_link: str = None, role2: discord.Role = None, role3: discord.Role = None):
+    logger.info(f"Received missing_mentions: {message_link}, {[role.name, role2.name if role2 else None, role3.name if role3 else None]}, from user: {ctx.user.name} <@{ctx.user.id}>")
     apollo_id = 475744554910351370
     try:
         if not message_link:
-            async for message in ctx.channel.history(limit=None):
+            async for message in ctx.channel.history(limit=None, oldest_first=True):
                 if message.author.id == apollo_id:
                     message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
                     break
@@ -148,7 +150,11 @@ async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message
             return
         event_mentions = []
         await ctx.guild.chunk()
-        role_members = [member.id for member in role.members]
+        role_members = set(member.id for member in role.members)
+        if role2:
+            role_members |= set(member.id for member in role2.members)
+        if role3:
+            role_members |= set(member.id for member in role3.members)
         if not role_members:
             await ctx.response.send_message(f"{MISSING_MENTIONS_ERROR_NO_MEMBERS}: **{role.name}**.", ephemeral=True)
             return
@@ -165,12 +171,14 @@ async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message
         await ctx.response.send_message(f"{message_link} {MISSING_MENTIONS_RESPONSE_SUCCESS}:\n{missing_reactions_str}")
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; {type(role)}; traceback: {traceback.format_exc()}")
+        logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; {type(role)}; {type(role2)}; {type(role3)}; traceback: {traceback.format_exc()}")
 
 @bot.command()
 async def sync(ctx):
+    logger.info("Got SYNC request.")
     await bot.tree.sync()
     await ctx.send(f"{SYNCED}.")
+    logger.info("SYNC success.")
 
 @bot.tree.command(name="missing_voice", description=f"{MISSING_VOICE_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
@@ -182,7 +190,7 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
     logger.info(f"Received missing_voice: {voice_name}, {message_link}, from user: {ctx.user.name} <@{ctx.user.id}>")
     try:
         if not message_link:
-            async for message in ctx.channel.history(limit=None):
+            async for message in ctx.channel.history(limit=None, oldest_first=True):
                 if message.content.startswith("~"):
                     message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
                     break
@@ -331,5 +339,42 @@ async def generate_roster(ctx: discord.Interaction,  message_link: str):
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; traceback: {traceback.format_exc()}")
+
+@bot.tree.command(name="ping_tentative", description=f"{PING_TENTATIVE_COMMAND_DESCRIPTION}.")
+@discord.app_commands.describe(
+    message_link=f"{MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION}."
+)
+@commands.has_permissions(administrator=True)
+async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
+    logger.info(f"Received ping_tentative: {message_link}, from user: {ctx.user.name} <@{ctx.user.id}>")
+    apollo_id = 475744554910351370
+    try:
+        if not message_link:
+            async for message in ctx.channel.history(limit=None, oldest_first=True):
+                if message.author.id == apollo_id:
+                    message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
+                    break
+            if not message_link:
+                await ctx.response.send_message(f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_MENTIONS_CANNOT_FIND_APOLLO_MESSAGE}.", ephemeral=True)
+                return
+        message = await fetch_message_from_url(ctx, message_link)
+        if not message:
+            return
+        if message.author.id != apollo_id:
+            await ctx.response.send_message(f"{ERROR_NOT_APPOLO}: {message_link}", ephemeral=True)
+            return
+        event_mentions = []
+        for field in message.embeds[0].fields:
+            if field.name[:11] == '<:tentative' and field.value[:6] == '>>> <@':
+                mentions = field.value[4:].replace('<@', '').replace('>', '')
+                event_mentions.extend([int(m) for m in mentions.split('\n') if m])
+        if not event_mentions:
+            await ctx.response.send_message(f"{PING_TENTATIVE_MENTIONS_MEMBERS_ALL_REACTED} {message_link}.", ephemeral=True)
+            return
+        ping_tentative_str = "\n".join(f"<@{reaction}>" for reaction in event_mentions)
+        await ctx.response.send_message(f"{PING_TENTATIVE_RESPONSE_SUCCESS}:\n{ping_tentative_str}")
+    except Exception as e:
+        await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; traceback: {traceback.format_exc()}")
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)

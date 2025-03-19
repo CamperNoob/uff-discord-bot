@@ -14,6 +14,7 @@ MISSING_MENTIONS_ERROR_NO_MEMBERS = f"{ERROR_GENERIC}: provided role has no memb
 MISSING_MENTIONS_MEMBERS_ALL_REACTED = "All members of the role reacted to event"
 MISSING_MENTIONS_RESPONSE_SUCCESS = "- missing reactions from"
 MISSING_MENTIONS_CANNOT_FIND_APOLLO_MESSAGE = "event message from Apollo bot"
+MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION = "(Additional role)"
 
 MISSING_VOICE_COMMAND_DESCRIPTION = "Returns mentions of members from the message that are absent in the provided voice channel"
 MISSING_VOICE_MESSAGE_LINK_DESCRIPTION = "URL to message. Leave empty to find message starting with ~"
@@ -35,3 +36,8 @@ GENERATE_ROSTER_COMMAND_DESCRIPTION = "Generates roster from provided string. Tr
 GENERATE_ROSTER_PARAMETER_DESCRIPTION = "URL to message with roster for generation"
 GENERATE_ROSTER_SUCCESS = "Generated roster"
 GENERATE_ROSTER_FAILED = "Roster generation failed from string"
+
+PING_TENTATIVE_COMMAND_DESCRIPTION = "Returns mentions of members with tentative react to Apollo event"
+PING_TENTATIVE_MESSAGE_LINK_DESCRIPTION = "URL to Apollo message with event. Leave empty to find message from Apollo"
+PING_TENTATIVE_RESPONSE_SUCCESS = 'Please update your ❔"Tentative" reactions'
+PING_TENTATIVE_MENTIONS_MEMBERS_ALL_REACTED = 'There are no ❔"Tentative" reactions'
