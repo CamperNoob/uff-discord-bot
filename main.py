@@ -225,7 +225,7 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
     
 )
 @commands.has_permissions(administrator=True)
-async def generate_roster(ctx: discord.Interaction,  message_link: str):
+async def generate_roster(ctx: discord.Interaction, message_link: str):
     guild = ctx.guild
     emoji_map = {
         'sl':discord.utils.get(guild.emojis, name='role_sl') or 'SL',
@@ -290,11 +290,10 @@ async def generate_roster(ctx: discord.Interaction,  message_link: str):
         await guild.chunk()
         message = await fetch_message_from_url(ctx, message_link)
         guild_discord_members = guild.members
-        guild_members = {member.display_name.lower():member.id for member in guild_discord_members}
+        guild_members = {member.name.lower():member.id for member in guild_discord_members if member.name is not None}
         guild_members_display_names = defaultdict(list)
         for member in guild_discord_members:
             guild_members_display_names[member.display_name.lower()].append(member.id)
-        {member.display_name.lower():member.id for member in guild.members}
         roster_string_list = message.content.split('\n')
         return_text = []
         for line in roster_string_list:
@@ -322,6 +321,8 @@ async def generate_roster(ctx: discord.Interaction,  message_link: str):
                     color_value = emoji_map.get(item[1:].lower())
                     if color_value:
                         line_list.append(f"\n**{item[1:]}** {color_value} ")
+                    elif not item[1:] or item[1:] == ' ':
+                        line_list.append(f" ")
                     else:
                         line_list.append(f"**{item[1:]}** ")
                 else:
