@@ -63,3 +63,9 @@ GRAFANA_IGNORE_STEAMID_STR = 'SteamID'
 GRAFANA_IGNORE_NAME_STR = "Ім'я"
 GRAFANA_INGORE_ID_STR = "Ідентифікатор"
 GRAFANA_IGNORE_STATUS_STR = "Статус"
+
+GRAFANA_INVITE_COMMAND_DESCRIPTION = 'Створює посилання для реєстрації в Графані'
+GRAFANA_INVITE_NAME_VARIABLE = "Ім'я користувача для якого створюється посилання"
+GRAFANA_INVITE_GENERIC_HTTP_FAIL = f"{ERROR_GENERIC}: помилка зі сторони Графани. Спробуйте ще раз, або зверніться до адміністратора"
+GRAFANA_INVITE_SUCCESS = 'Успішно створено посилання для реєстрації'
+GRAFANA_INVITE_USER_ALREADY_EXISTS = f"{ERROR_GENERIC}: Користувач вже існує в Графані з іменем"

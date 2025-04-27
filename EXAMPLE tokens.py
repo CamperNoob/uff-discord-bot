@@ -6,3 +6,7 @@ MySQL = {
     "password": "", #db password
     "database": "" #db name
 }
+Grafana = {
+    "url": "https://grafana.url.link/",
+    "token": ""
+}

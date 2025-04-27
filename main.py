@@ -3,13 +3,14 @@ from discord.ext import commands
 import logging
 
 import pymysql.cursors
-from tokens import DiscordToken, MySQL
+from tokens import DiscordToken, MySQL, Grafana
 import difflib
 import traceback
 from collections import defaultdict
 from translations.ua import *
 import pymysql
 import re
+import requests
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
@@ -187,7 +188,7 @@ async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message
         await ctx.response.send_message(f"{message_link} {MISSING_MENTIONS_RESPONSE_SUCCESS}:\n{missing_reactions_str}")
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; {type(role)}; {type(role2)}; {type(role3)}; traceback: {traceback.format_exc()}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; {type(role)}; {type(role2)}; {type(role3)}; traceback: {traceback.format_exc()}")
 
 @bot.command()
 async def sync(ctx):
@@ -396,7 +397,7 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
         await ctx.response.send_message(f"{PING_TENTATIVE_RESPONSE_SUCCESS}:\n{ping_tentative_str}")
     except Exception as e:
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; traceback: {traceback.format_exc()}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; traceback: {traceback.format_exc()}")
 
 @bot.tree.command(name="grafana_ignore", description=f"{GRAFANA_IGNORE_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
@@ -495,8 +496,96 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
                 )
     except Exception as e:
         await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.info(f"{ERROR_GENERIC}: {e}; args: {ignore}, {player_id}, {name}, {steam_id}; traceback: {traceback.format_exc()}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {ignore}, {player_id}, {name}, {steam_id}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
+
+@bot.tree.command(name="grafana_invite", description=f"{GRAFANA_INVITE_COMMAND_DESCRIPTION}.")
+@discord.app_commands.describe(
+    name=f"{GRAFANA_INVITE_NAME_VARIABLE}."
+)
+@commands.has_permissions(administrator=True)
+async def grafana_invite(interaction: discord.Interaction, name:str):
+    logger.info(f"Received grafana_invite: {name}, from user: {interaction.user.name} <@{interaction.user.id}>")
+
+    def check_invites(data:list, name:str) -> tuple[bool, str]:
+        exists = False
+        url = None
+        for invite in data:
+            if invite.get('name') == name:
+                exists = True
+                url = invite.get('url')
+                break
+        return exists, url
+    
+    invites_endpoint = f"{Grafana.get("url")}api/org/invites"
+    token = Grafana.get("token")
+    header = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "email": f"",
+        "loginOrEmail": name,
+        "name": name,
+        "role": "Viewer",
+        "sendEmail": False,
+    }
+    try:
+        try:
+            response_get_noduplicates = requests.get(invites_endpoint, headers=header)
+        except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                logger.error(f"HTTP request failed on invite url retrieval; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+        if response_get_noduplicates.status_code == 200:
+            exists, url = check_invites(response_get_noduplicates.json(), name)
+        else:
+            await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+            logger.error(f"Did not receive proper response for get invites for duplicates. Status: {response_get.status_code}, Text: {response_get.text}")
+            return
+        if exists:
+            await interaction.response.send_message(f"{GRAFANA_INVITE_SUCCESS}: ```{url}```", ephemeral=True)
+            logger.info(f"Retrieved existing invite for user: {name}, url: {url}")
+            return
+        else:
+            try:
+                response_post = requests.post(invites_endpoint, json=data, headers=header)
+            except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                logger.error(f"HTTP request failed on invite creation; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+            if response_post.status_code == 200:
+                try:
+                    response_get = requests.get(invites_endpoint, headers=header)
+                except Exception as e:
+                    await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                    logger.error(f"HTTP request failed on invite url retrieval; Exception: {e}; traceback: {traceback.format_exc()}")
+                    return
+                if response_get.status_code == 200:
+                    exists, url = check_invites(response_get.json(), name)
+                    if not url:
+                        await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                        logger.error(f"Did not get an URL for created user: {name}")
+                        return
+                    await interaction.response.send_message(f"{GRAFANA_INVITE_SUCCESS}: ```{url}```", ephemeral=True)
+                    logger.info(f"Generated invite for user: {name}, url: {url}")
+                    return
+                else:
+                    await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                    logger.error(f"Did not receive proper response for list of invites. Status: {response_get.status_code}, Text: {response_get.text}")
+                    return
+            elif response_post.status_code == 412:
+                await interaction.response.send_message(f"{GRAFANA_INVITE_USER_ALREADY_EXISTS}: `{name}`", ephemeral=True)
+                logger.warning(f"Tried to create an invite for already existing user: {name}")
+                return
+            else:
+                await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                logger.error(f"Did not receive proper response for create invite. Status: {response_get.status_code}, Text: {response_get.text}")
+                return
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {name}; traceback: {traceback.format_exc()}")
+        
     
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
