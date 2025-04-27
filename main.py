@@ -402,7 +402,8 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
 @discord.app_commands.describe(
     ignore=f"{GRAFANA_IGNORE_IGNORE_VARIABLE}.",
     player_id=f"{GRAFANA_IGNORE_PLAYER_ID_VARIABLE}.",
-    name=f"{GRAFANA_IGNORE_NAME_VARIABLE}."
+    name=f"{GRAFANA_IGNORE_NAME_VARIABLE}.",
+    steam_id=f"{GRAFANA_IGNORE_STEAM_ID_VARIABLE}."
 )
 @discord.app_commands.choices(
     ignore=[
@@ -411,7 +412,7 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
     ]
 )
 @commands.has_permissions(administrator=True)
-async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_id: int = None, name:str = None):
+async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_id: int = None, name:str = None, steam_id: str = None):
     # await interaction.response.defer(thinking=True, ephemeral=False)  # All pre-responses are ephemeral
     try:
         conn = get_db_connection()
@@ -422,33 +423,51 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
     try:
         with conn.cursor() as cursor:
             if player_id is None:
-                if not name:
+                if not (name or steam_id):
                     await interaction.response.send_message(f"{GRAFANA_IGNORE_NEED_ID_OR_NAME}.", ephemeral=True)
                     return
-                if re.search(r"([`'\";]|--{2,})", name):
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
-                    logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
-                    return
-                try:
-                    cursor.execute("SELECT id, lastName FROM dblog_players WHERE lastName LIKE %s", ('%' + name + '%',))
-                    results = cursor.fetchall()
-                except Exception as e:
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
-                    logger.error(f"Select query failed for name: {name}; Exception: {e}; traceback: {traceback.format_exc()}")
-                    return
-                if not results:
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_NAME_SEARCH_NO_RESULTS}: {name}", ephemeral=True)
-                    return
-                elif len(results) == 1:
-                    player_id = results[0]['id']
+                elif name and not steam_id:
+                    if re.search(r"([`'\";]|--{2,})", name):
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
+                        logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                        return
+                    try:
+                        cursor.execute("SELECT id, lastName, steamID FROM dblog_players WHERE lastName LIKE %s", ('%' + name + '%',))
+                        results = cursor.fetchall()
+                    except Exception as e:
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                        logger.error(f"Select query failed for name: {name}; Exception: {e}; traceback: {traceback.format_exc()}")
+                        return
+                    if not results:
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_NAME_SEARCH_NO_RESULTS}: {name}", ephemeral=True)
+                        return
+                    elif len(results) == 1:
+                        player_id = results[0]['id']
+                    else:
+                        message = f"{GRAFANA_IGNORE_MULTIPLE_IDS_FROM_NAME}:"
+                        for r in results:
+                            message += f"\n### {GRAFANA_IGNORE_NAME_STR}: `{r['lastName']}`:\n- {GRAFANA_INGORE_ID_STR}: `{r['id']}`\n- {GRAFANA_IGNORE_STEAMID_STR}: `{r['steamID']}`"
+                        if len(message) > DISCORD_MAX_MESSAGE_LEN:
+                            message = f"{message[:DISCORD_MAX_MESSAGE_LEN-3]}..."
+                        await interaction.response.send_message(message, ephemeral=True)
+                        return
                 else:
-                    message = f"{GRAFANA_IGNORE_MULTIPLE_IDS_FROM_NAME}:"
-                    for r in results:
-                        message += f"\n {r['id']}, {r['lastName']}"
-                    if len(message) > DISCORD_MAX_MESSAGE_LEN:
-                        message = f"{message[:DISCORD_MAX_MESSAGE_LEN-3]}..."
-                    await interaction.response.send_message(message, ephemeral=True)
-                    return
+                    try:
+                        cursor.execute("SELECT id, lastName, steamID FROM dblog_players WHERE steamID = %s", (steam_id,))
+                        results = cursor.fetchall()
+                    except Exception as e:
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                        logger.error(f"Select query failed for steamID: {steam_id}; Exception: {e}; traceback: {traceback.format_exc()}")
+                        return
+                    if not results:
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_STEAMID_SEARCH_NO_RESULTS}: {steam_id}", ephemeral=True)
+                        return
+                    elif len(results) == 1:
+                        player_id = results[0]['id']
+                    else:
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                        logger.warning(f"Select query for steamID: {steam_id} returned multiple results")
+                        return
             try:
                 cursor.execute("SELECT id FROM dblog_players WHERE id = %s", (player_id,))
                 existing = cursor.fetchone()
@@ -463,7 +482,7 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
             try:
                 cursor.execute("UPDATE dblog_players SET `ignore` = %s WHERE id = %s", (ignore_value, player_id))
                 conn.commit()
-                cursor.execute("SELECT id, lastName, `ignore` FROM dblog_players WHERE id = %s", (player_id,))
+                cursor.execute("SELECT id, lastName, steamID, `ignore` FROM dblog_players WHERE id = %s", (player_id,))
                 updated = cursor.fetchone()
                 updated_ignore = GRAFANA_IGNORE_IGNORED if updated['ignore'] == 1 else GRAFANA_IGNORE_UNIGNORED
             except Exception as e:
@@ -471,12 +490,12 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
                 logger.error(f"Select query failed for id: {player_id}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
             await interaction.response.send_message(
-                    f"{GRAFANA_IGNORE_SUCCESS}: {updated['id']}, {updated['lastName']}, {updated_ignore}.",
+                    f"### {GRAFANA_IGNORE_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_IGNORE_NAME_STR}: `{updated['lastName']}`,\n- {GRAFANA_IGNORE_STEAMID_STR}: `{updated['steamID']}`,\n- {GRAFANA_IGNORE_STATUS_STR}:{updated_ignore}.",
                     ephemeral=False
                 )
     except Exception as e:
         await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.info(f"{ERROR_GENERIC}: {e}; args: {ignore}, {player_id}, {name}; traceback: {traceback.format_exc()}")
+        logger.info(f"{ERROR_GENERIC}: {e}; args: {ignore}, {player_id}, {name}, {steam_id}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
     
