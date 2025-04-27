@@ -490,7 +490,7 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
                 logger.error(f"Select query failed for id: {player_id}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
             await interaction.response.send_message(
-                    f"### {GRAFANA_IGNORE_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_IGNORE_NAME_STR}: `{updated['lastName']}`,\n- {GRAFANA_IGNORE_STEAMID_STR}: `{updated['steamID']}`,\n- {GRAFANA_IGNORE_STATUS_STR}:{updated_ignore}.",
+                    f"### {GRAFANA_IGNORE_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_IGNORE_NAME_STR}: `{updated['lastName']}`,\n- {GRAFANA_IGNORE_STEAMID_STR}: `{updated['steamID']}`,\n- {GRAFANA_IGNORE_STATUS_STR}: `{updated_ignore}`.",
                     ephemeral=False
                 )
     except Exception as e:
