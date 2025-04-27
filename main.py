@@ -413,7 +413,7 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
 )
 @commands.has_permissions(administrator=True)
 async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_id: int = None, name:str = None, steam_id: str = None):
-    # await interaction.response.defer(thinking=True, ephemeral=False)  # All pre-responses are ephemeral
+    logger.info(f"Received grafana_ignore: {[ignore, player_id, name, steam_id]}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
         conn = get_db_connection()
     except Exception as e:
