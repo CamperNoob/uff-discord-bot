@@ -1,11 +1,17 @@
 import discord
 from discord.ext import commands
 import logging
-from tokens import DiscordToken
+
+import pymysql.cursors
+from tokens import DiscordToken, MySQL
 import difflib
 import traceback
 from collections import defaultdict
 from translations.ua import *
+import pymysql
+import re
+
+DISCORD_MAX_MESSAGE_LEN = 2000
 
 logger = logging.getLogger("discord")
 logger.setLevel(logging.INFO)
@@ -19,6 +25,16 @@ intents.guilds = True
 intents.members = True
 
 bot = commands.Bot(command_prefix="/", intents=intents)
+
+def get_db_connection():
+    return pymysql.connect(
+        host=MySQL.get("host"),
+        port=MySQL.get("port", 3306),
+        user=MySQL.get("user"),
+        password=MySQL.get("password"),
+        database=MySQL.get("database"),
+        cursorclass=pymysql.cursors.DictCursor
+    )
 
 class missingVoiceChannelSelectView(discord.ui.View):
     def __init__(self, matches, voice_channel_names, ctx, message_link):
@@ -333,7 +349,11 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
                         line_list.append(f"{item} ")
             return_text.append(" ".join(line_list))
         if return_text:
-            await ctx.response.send_message(f"{GENERATE_ROSTER_SUCCESS}:\n{'\n'.join(return_text)}")
+            message_text = f"{GENERATE_ROSTER_SUCCESS}:\n{'\n'.join(return_text)}"
+            if len(message_text) > DISCORD_MAX_MESSAGE_LEN:
+                await ctx.response.send_message(f"{message_text[:DISCORD_MAX_MESSAGE_LEN-3]}...")
+            else:  
+                await ctx.response.send_message(message_text)
         else:
             await ctx.response.send_message(f"{GENERATE_ROSTER_FAILED}:{message_link}")
         return
@@ -378,4 +398,86 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
         await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.info(f"{ERROR_GENERIC}: {e}; args: {message_link}; traceback: {traceback.format_exc()}")
 
+@bot.tree.command(name="grafana_ignore", description=f"{GRAFANA_IGNORE_COMMAND_DESCRIPTION}.")
+@discord.app_commands.describe(
+    ignore=f"{GRAFANA_IGNORE_IGNORE_VARIABLE}.",
+    player_id=f"{GRAFANA_IGNORE_PLAYER_ID_VARIABLE}.",
+    name=f"{GRAFANA_IGNORE_NAME_VARIABLE}."
+)
+@discord.app_commands.choices(
+    ignore=[
+        discord.app_commands.Choice(name=f"{GRAFANA_IGNORE_VALUE_IGNORE}", value=1),
+        discord.app_commands.Choice(name=f"{GRAFANA_IGNORE_VALUE_UNIGNORE}", value=0)
+    ]
+)
+@commands.has_permissions(administrator=True)
+async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_id: int = None, name:str = None):
+    # await interaction.response.defer(thinking=True, ephemeral=False)  # All pre-responses are ephemeral
+    try:
+        conn = get_db_connection()
+    except Exception as e:
+        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
+        return
+    try:
+        with conn.cursor() as cursor:
+            if player_id is None:
+                if not name:
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_NEED_ID_OR_NAME}.", ephemeral=True)
+                    return
+                if re.search(r"([`'\";]|--{2,})", name):
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
+                    logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                    return
+                try:
+                    cursor.execute("SELECT id, lastName FROM dblog_players WHERE lastName LIKE %s", ('%' + name + '%',))
+                    results = cursor.fetchall()
+                except Exception as e:
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                    logger.error(f"Select query failed for name: {name}; Exception: {e}; traceback: {traceback.format_exc()}")
+                    return
+                if not results:
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_NAME_SEARCH_NO_RESULTS}: {name}", ephemeral=True)
+                    return
+                elif len(results) == 1:
+                    player_id = results[0]['id']
+                else:
+                    message = f"{GRAFANA_IGNORE_MULTIPLE_IDS_FROM_NAME}:"
+                    for r in results:
+                        message += f"\n {r['id']}, {r['lastName']}"
+                    if len(message) > DISCORD_MAX_MESSAGE_LEN:
+                        message = f"{message[:DISCORD_MAX_MESSAGE_LEN-3]}..."
+                    await interaction.response.send_message(message, ephemeral=True)
+                    return
+            try:
+                cursor.execute("SELECT id FROM dblog_players WHERE id = %s", (player_id,))
+                existing = cursor.fetchone()
+            except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                logger.error(f"Select query failed for id: {player_id}; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+            if not existing:
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_NO_ID_FOUND}: {player_id}", ephemeral=True)
+                return
+            ignore_value = ignore #1 if ignore else 0
+            try:
+                cursor.execute("UPDATE dblog_players SET `ignore` = %s WHERE id = %s", (ignore_value, player_id))
+                conn.commit()
+                cursor.execute("SELECT id, lastName, `ignore` FROM dblog_players WHERE id = %s", (player_id,))
+                updated = cursor.fetchone()
+                updated_ignore = GRAFANA_IGNORE_IGNORED if updated['ignore'] == 1 else GRAFANA_IGNORE_UNIGNORED
+            except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                logger.error(f"Select query failed for id: {player_id}; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+            await interaction.response.send_message(
+                    f"{GRAFANA_IGNORE_SUCCESS}: {updated['id']}, {updated['lastName']}, {updated_ignore}.",
+                    ephemeral=False
+                )
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.info(f"{ERROR_GENERIC}: {e}; args: {ignore}, {player_id}, {name}; traceback: {traceback.format_exc()}")
+    finally:
+        conn.close()
+    
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
