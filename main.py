@@ -758,9 +758,9 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
     status=f"{AUTOPOST_ENABLE_STATUS_DESCRIPTION}."
 )
 @discord.app_commands.choices(
-    ignore=[
-        discord.app_commands.Choice(status=f"{AUTOPOST_ENABLE_STATUS_ENABLED}", value=1),
-        discord.app_commands.Choice(status=f"{AUTOPOST_ENABLE_STATUS_DISABLED}", value=0)
+    status=[
+        discord.app_commands.Choice(name=f"{AUTOPOST_ENABLE_STATUS_ENABLED}", value=1),
+        discord.app_commands.Choice(name=f"{AUTOPOST_ENABLE_STATUS_DISABLED}", value=0)
     ]
 )
 @commands.has_any_role(*perms.roles.values())
