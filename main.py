@@ -1,5 +1,5 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import logging
 
 import pymysql.cursors
@@ -12,7 +12,10 @@ import pymysql
 import re
 import requests
 import perms
-from datetime import datetime
+from datetime import datetime, time, timedelta
+import asyncio
+from seeding_messages_config import autopost_conf
+import random
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
@@ -27,7 +30,16 @@ intents.message_content = True
 intents.guilds = True
 intents.members = True
 
+autopost_enabled = autopost_conf.get("enabled", False)
+
 bot = commands.Bot(command_prefix="/", intents=intents)
+
+def seconds_until(target_time):
+    now = datetime.now()
+    target = datetime.combine(now.date(), target_time)
+    if now > target:
+        target += timedelta(days=1)
+    return (target - now).total_seconds()
 
 def get_db_connection():
     return pymysql.connect(
@@ -140,6 +152,31 @@ async def on_ready():
         logger.info(f"Synced {len(synced)} commands.")
     except Exception as e:
         logger.info(f"Error syncing commands: {e}")
+    try:
+        if autopost_enabled:
+            if not daily_autopost.is_running():
+                await before_daily_autopost()
+                daily_autopost.start()
+    except Exception as e:
+        logger.error(f"[daily_autopost():on_ready()] {ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
+
+@tasks.loop(hours=24)
+async def daily_autopost():
+    try:
+        target = await bot.fetch_channel(autopost_conf.get("target_id"))
+        message = random.choice(autopost_conf.get("messages"))
+        await target.send(message)
+    except Exception as e:
+        logger.error(f"[daily_autopost()] {ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
+
+async def before_daily_autopost():
+    try:
+        target_time = time(hour=autopost_conf.get("hour", 9), minute=autopost_conf.get("minute", 15))
+        wait_time = seconds_until(target_time)
+        logger.info(f"[daily_autopost():before_daily_autopost()] Waiting {wait_time:.0f} seconds until first autopost.")
+        await asyncio.sleep(wait_time)
+    except Exception as e:
+        logger.error(f"[daily_autopost():before_daily_autopost()] {ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
@@ -715,5 +752,35 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
         logger.error(f"{ERROR_GENERIC}: {e}; args: {data}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
+
+@bot.tree.command(name="autopost_enable", description=f"{AUTOPOST_ENABLE_DESCRIPTION}.")
+@discord.app_commands.describe(
+    status=f"{AUTOPOST_ENABLE_STATUS_DESCRIPTION}."
+)
+@discord.app_commands.choices(
+    ignore=[
+        discord.app_commands.Choice(status=f"{AUTOPOST_ENABLE_STATUS_ENABLED}", value=1),
+        discord.app_commands.Choice(status=f"{AUTOPOST_ENABLE_STATUS_DISABLED}", value=0)
+    ]
+)
+@commands.has_any_role(*perms.roles.values())
+async def autopost_enable(interaction: discord.Interaction, status:int):
+    logger.info(f"Received autopost_enable: {status}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    global autopost_enabled
+    try:
+        if status == 1:
+            autopost_enabled = True
+            if not daily_autopost.is_running():
+                await before_daily_autopost()
+                daily_autopost.start()
+            await interaction.response.send_message(f"{AUTOPOST_ENABLE_COMMAND_ENABLED}.", ephemeral=False)
+        else:
+            autopost_enabled = False
+            if daily_autopost.is_running():
+                daily_autopost.cancel()
+            await interaction.response.send_message(f"{AUTOPOST_ENABLE_COMMAND_DISABLED}.", ephemeral=False)
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {status}; traceback: {traceback.format_exc()}")
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)

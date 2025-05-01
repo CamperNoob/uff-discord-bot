@@ -173,3 +173,4 @@ cython_debug/
 tokens.py
 bot.log
 perms.py
+seeding_messages_config.py
