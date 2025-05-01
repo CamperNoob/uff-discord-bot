@@ -151,7 +151,7 @@ async def on_ready():
         synced = await bot.tree.sync()
         logger.info(f"Synced {len(synced)} commands.")
     except Exception as e:
-        logger.info(f"Error syncing commands: {e}")
+        logger.error(f"Error syncing commands: {e}")
     try:
         if autopost_enabled:
             if not daily_autopost.is_running():
@@ -166,6 +166,7 @@ async def daily_autopost():
         target = await bot.fetch_channel(autopost_conf.get("target_id"))
         message = random.choice(autopost_conf.get("messages"))
         await target.send(message)
+        logger.info(f"[daily_autopost()] Sent the post with message: {message}.")
     except Exception as e:
         logger.error(f"[daily_autopost()] {ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
 
@@ -770,10 +771,10 @@ async def autopost_enable(interaction: discord.Interaction, status:int):
     try:
         if status == 1:
             autopost_enabled = True
+            await interaction.response.send_message(f"{AUTOPOST_ENABLE_COMMAND_ENABLED}.", ephemeral=False)
             if not daily_autopost.is_running():
                 await before_daily_autopost()
                 daily_autopost.start()
-            await interaction.response.send_message(f"{AUTOPOST_ENABLE_COMMAND_ENABLED}.", ephemeral=False)
         else:
             autopost_enabled = False
             if daily_autopost.is_running():
