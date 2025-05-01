@@ -12,6 +12,7 @@ import pymysql
 import re
 import requests
 import perms
+from datetime import datetime
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
@@ -147,7 +148,7 @@ async def on_ready():
     role2=f"{MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION} {MISSING_MENTIONS_ROLE_DESCRIPTION}.",
     role3=f"{MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION} {MISSING_MENTIONS_ROLE_DESCRIPTION}.",
 )
-@commands.has_any_role(*perms.roles.keys())
+@commands.has_any_role(*perms.roles.values())
 async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message_link: str = None, role2: discord.Role = None, role3: discord.Role = None):
     logger.info(f"Received missing_mentions: {message_link}, {[role.name, role2.name if role2 else None, role3.name if role3 else None]}, from user: {ctx.user.name} <@{ctx.user.id}>")
     apollo_id = 475744554910351370
@@ -242,7 +243,7 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
     message_link=f"{GENERATE_ROSTER_PARAMETER_DESCRIPTION}."
     
 )
-@commands.has_any_role(*perms.roles.keys())
+@commands.has_any_role(*perms.roles.values())
 async def generate_roster(ctx: discord.Interaction, message_link: str):
     guild = ctx.guild
     emoji_map = {
@@ -367,7 +368,7 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
 @discord.app_commands.describe(
     message_link=f"{MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION}."
 )
-@commands.has_any_role(*perms.roles.keys())
+@commands.has_any_role(*perms.roles.values())
 async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
     logger.info(f"Received ping_tentative: {message_link}, from user: {ctx.user.name} <@{ctx.user.id}>")
     apollo_id = 475744554910351370
@@ -413,7 +414,7 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
         discord.app_commands.Choice(name=f"{GRAFANA_IGNORE_VALUE_UNIGNORE}", value=0)
     ]
 )
-@commands.has_any_role(*perms.roles.keys())
+@commands.has_any_role(*perms.roles.values())
 async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_id: int = None, name:str = None, steam_id: str = None):
     logger.info(f"Received grafana_ignore: {[ignore, player_id, name, steam_id]}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
@@ -505,7 +506,7 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
 @discord.app_commands.describe(
     name=f"{GRAFANA_INVITE_NAME_VARIABLE}."
 )
-@commands.has_any_role(*perms.roles.keys())
+@commands.has_any_role(*perms.roles.values())
 async def grafana_invite(interaction: discord.Interaction, name:str):
     logger.info(f"Received grafana_invite: {name}, from user: {interaction.user.name} <@{interaction.user.id}>")
 
@@ -587,6 +588,122 @@ async def grafana_invite(interaction: discord.Interaction, name:str):
     except Exception as e:
         await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {name}; traceback: {traceback.format_exc()}")
-        
-    
+
+@bot.tree.command(name="match_history_add", description=f"{MATCH_HISTORY_ADD_DESCRIPTION}.")
+@discord.app_commands.describe(
+    data=f"{MATCH_HISTORY_ADD_PARAMETER_DESCRIPTION}."
+)
+@commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
+async def match_history_add(interaction: discord.Interaction, data:str): # data: mm.dd.yyyy;csl_yehv1;SLS;-;100/0;120/23;discord.gg/channel/1231313;youtube;tactics
+    logger.info(f"Received match_history_add: {data}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    parse_data = data.split(';')
+    parsed_data_dict = {
+        "date": None,
+        "opponent": None,
+        "mercs": None,
+        "ticket_us_r1": None,
+        "ticket_op_r1": None,
+        "ticket_diff_r1": None,
+        "ticket_us_r2": None,
+        "ticket_op_r2": None,
+        "ticket_diff_r2": None,
+        "layer": None,
+        "vods": None,
+        "match_status": None,
+        "tactics": None,
+        "event_url": None,
+        "ignore": 0,
+        "event_name": None
+    }
+    errors = []
+    try:
+        parsed_data_dict["date"] = datetime.strptime(parse_data[0], "%d.%m.%Y").date()
+    except Exception as e:
+        errors.append(e)
+    try:
+        parsed_data_dict["event_url"] = parse_data[6]
+        match = re.match(r"https?://discord\.com/channels/\d+/(\d+)", parsed_data_dict["event_url"])
+        channel_id = int(match.group(1))
+        channel = await bot.fetch_channel(channel_id)
+        parsed_data_dict["event_name"] = channel.name
+    except Exception as e:
+        errors.append(e)
+    try:
+        parsed_data_dict["ticket_us_r1"], parsed_data_dict["ticket_op_r1"] = parse_data[4]
+        parsed_data_dict["ticket_us_r2"], parsed_data_dict["ticket_op_r2"] = parse_data[5]
+        parsed_data_dict["ticket_diff_r1"] = int(parsed_data_dict["ticket_us_r1"]) - int(parsed_data_dict["ticket_op_r1"])
+        parsed_data_dict["ticket_diff_r2"] = int(parsed_data_dict["ticket_us_r2"]) - int(parsed_data_dict["ticket_op_r2"])
+        parsed_data_dict["match_status"] = (
+            'W' if parsed_data_dict["ticket_diff_r1"] + parsed_data_dict["ticket_diff_r2"] > 0
+            else 'D' if parsed_data_dict["ticket_diff_r1"] + parsed_data_dict["ticket_diff_r2"] == 0
+            else 'L')
+    except Exception as e:
+        errors.append(e)
+    try:
+        parsed_data_dict["layer"] = parse_data[1]
+        parsed_data_dict["opponent"] = parse_data[2]
+        parsed_data_dict["mercs"] = parse_data[3]
+        parsed_data_dict["vods"] = parse_data[7]
+        parsed_data_dict["tactics"] = parse_data[8]
+    except Exception as e:
+        errors.append(e)
+    if errors:
+        msg = f"{MATCH_HISTORY_ADD_DATA_PARSE_ERROR}: {errors}"
+        if len(msg) > DISCORD_MAX_MESSAGE_LEN:
+            await interaction.response.send_message(f"{msg[:DISCORD_MAX_MESSAGE_LEN-3]}...")
+        else:  
+            await interaction.response.send_message(msg)
+        logger.error(f"Parsing data failed for match_history_add. Input: {data}, Errors: {errors}")
+        return
+    try:
+        conn = get_db_connection()
+    except Exception as e:
+        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
+        return
+    try:
+        with conn.cursor() as cursor:
+            for value in parsed_data_dict.values():
+                if re.search(r"([`'\";]|--{2,})", value):
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {value}", ephemeral=True)
+                    logger.warning(f"Catched SQL inject attempt: {value}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                    return
+            try:
+                query = """
+                INSERT INTO `match_history` (
+                    `date`, opponent, mercs, layer, match_status,
+                    ticket_us_r1, ticket_op_r1, ticket_diff_r1,
+                    ticket_us_r2, ticket_op_r2, ticket_diff_r2,
+                    event_url, vods, tactics, `ignore`, event_name
+                ) VALUES (
+                    %(date)s, %(opponent)s, %(mercs)s, %(layer)s, %(match_status)s,
+                    %(ticket_us_r1)s, %(ticket_op_r1)s, %(ticket_diff_r1)s,
+                    %(ticket_us_r2)s, %(ticket_op_r2)s, %(ticket_diff_r2)s,
+                    %(event_url)s, %(vods)s, %(tactics)s, %(ignore)s, %(event_name)s
+                )
+                """
+                cursor.execute(query, parsed_data_dict)
+                new_row_id = cursor.lastrowid
+                conn.commit()
+            except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                logger.error(f"Insert for match_history_add failed: {parsed_data_dict}; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+            try:
+                cursor.execute("SELECT event_name, `date`, layer, opponent FROM match_history_add WHERE id = %s", (new_row_id,))
+                existing = cursor.fetchone()
+            except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                logger.error(f"Select inserted row for match_history_add failed, rowID: {new_row_id}; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+            await interaction.response.send_message(
+                f"### {MATCH_HISTORY_ADD_SUCCESS_TEXT}:\n- {MATCH_HISTORY_ADD_SUCCESS_EVENT_NAME}: {existing['event_name']},\n- {MATCH_HISTORY_ADD_SUCCESS_DATE}: {existing['date']},\n- {MATCH_HISTORY_ADD_SUCCESS_LAYER}: `{existing['layer']}`,\n- {MATCH_HISTORY_ADD_SUCCESS_OPPONENT}: {existing['opponent']}.",
+                ephemeral=False
+            )
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {data}; traceback: {traceback.format_exc()}")
+    finally:
+        conn.close()
+
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)

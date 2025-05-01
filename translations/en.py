@@ -69,3 +69,12 @@ GRAFANA_INVITE_NAME_VARIABLE = "User name for invite"
 GRAFANA_INVITE_GENERIC_HTTP_FAIL = f"{ERROR_GENERIC}: Grafana error. Please try again or contact administrator"
 GRAFANA_INVITE_SUCCESS = 'Invite link created successfully'
 GRAFANA_INVITE_USER_ALREADY_EXISTS = f"{ERROR_GENERIC}: User already exists in Grafana with name"
+
+MATCH_HISTORY_ADD_DESCRIPTION = 'Adds match record into match history table of Grafana'
+MATCH_HISTORY_ADD_PARAMETER_DESCRIPTION = 'Format: date day.month.year;layer;opponent;mercs;our tickers/opp R1;our tickets/opp R2;link to event channel;vods;tactics'
+MATCH_HISTORY_ADD_DATA_PARSE_ERROR = f"{ERROR_GENERIC}: Error parsing the data. Details"
+MATCH_HISTORY_ADD_SUCCESS_TEXT = "Successfully added match record to database"
+MATCH_HISTORY_ADD_SUCCESS_EVENT_NAME = "Match name"
+MATCH_HISTORY_ADD_SUCCESS_DATE = "Match date"
+MATCH_HISTORY_ADD_SUCCESS_LAYER ="Layer"
+MATCH_HISTORY_ADD_SUCCESS_OPPONENT = "Opponent"

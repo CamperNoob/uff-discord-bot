@@ -69,3 +69,12 @@ GRAFANA_INVITE_NAME_VARIABLE = "Ім'я користувача для якого
 GRAFANA_INVITE_GENERIC_HTTP_FAIL = f"{ERROR_GENERIC}: помилка зі сторони Графани. Спробуйте ще раз, або зверніться до адміністратора"
 GRAFANA_INVITE_SUCCESS = 'Успішно створено посилання для реєстрації'
 GRAFANA_INVITE_USER_ALREADY_EXISTS = f"{ERROR_GENERIC}: Користувач вже існує в Графані з іменем"
+
+MATCH_HISTORY_ADD_DESCRIPTION = 'Додає запис про проведений скрім в таблицю графани'
+MATCH_HISTORY_ADD_PARAMETER_DESCRIPTION = 'Формат: дата день.місяць.рік;леєр;противник;найманці;наші тікети/ворожі Р1;наші тікети/ворожі Р2;посилання на подію;відео;тактика'
+MATCH_HISTORY_ADD_DATA_PARSE_ERROR = f"{ERROR_GENERIC}: Помилка обробки наданих даних. Детальніше"
+MATCH_HISTORY_ADD_SUCCESS_TEXT = "Успішно додано запис про матч в базу даних"
+MATCH_HISTORY_ADD_SUCCESS_EVENT_NAME = "Ім'я матчу"
+MATCH_HISTORY_ADD_SUCCESS_DATE = "Дата матчу"
+MATCH_HISTORY_ADD_SUCCESS_LAYER ="Леєр"
+MATCH_HISTORY_ADD_SUCCESS_OPPONENT = "Противник"
