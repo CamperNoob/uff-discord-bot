@@ -591,7 +591,7 @@ async def grafana_invite(interaction: discord.Interaction, name:str):
 
 @bot.tree.command(name="match_history_add", description=f"{MATCH_HISTORY_ADD_DESCRIPTION}.")
 @discord.app_commands.describe(
-    data=f"{MATCH_HISTORY_ADD_PARAMETER_DESCRIPTION}."
+    data=f"{MATCH_HISTORY_ADD_PARAMETER_DESCRIPTION}"
 )
 @commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
 async def match_history_add(interaction: discord.Interaction, data:str): # data: mm.dd.yyyy;csl_yehv1;SLS;-;100/0;120/23;discord.gg/channel/1231313;youtube;tactics
@@ -629,8 +629,8 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
     except Exception as e:
         errors.append(e)
     try:
-        parsed_data_dict["ticket_us_r1"], parsed_data_dict["ticket_op_r1"] = parse_data[4]
-        parsed_data_dict["ticket_us_r2"], parsed_data_dict["ticket_op_r2"] = parse_data[5]
+        parsed_data_dict["ticket_us_r1"], parsed_data_dict["ticket_op_r1"] = parse_data[4].split('/')
+        parsed_data_dict["ticket_us_r2"], parsed_data_dict["ticket_op_r2"] = parse_data[5].split('/')
         parsed_data_dict["ticket_diff_r1"] = int(parsed_data_dict["ticket_us_r1"]) - int(parsed_data_dict["ticket_op_r1"])
         parsed_data_dict["ticket_diff_r2"] = int(parsed_data_dict["ticket_us_r2"]) - int(parsed_data_dict["ticket_op_r2"])
         parsed_data_dict["match_status"] = (
@@ -650,9 +650,9 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
     if errors:
         msg = f"{MATCH_HISTORY_ADD_DATA_PARSE_ERROR}: {errors}"
         if len(msg) > DISCORD_MAX_MESSAGE_LEN:
-            await interaction.response.send_message(f"{msg[:DISCORD_MAX_MESSAGE_LEN-3]}...")
+            await interaction.response.send_message(f"{msg[:DISCORD_MAX_MESSAGE_LEN-3]}...", ephemeral=True)
         else:  
-            await interaction.response.send_message(msg)
+            await interaction.response.send_message(msg, ephemeral=True)
         logger.error(f"Parsing data failed for match_history_add. Input: {data}, Errors: {errors}")
         return
     try:
@@ -664,10 +664,11 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
     try:
         with conn.cursor() as cursor:
             for value in parsed_data_dict.values():
-                if re.search(r"([`'\";]|--{2,})", value):
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {value}", ephemeral=True)
-                    logger.warning(f"Catched SQL inject attempt: {value}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
-                    return
+                if isinstance(value, str):
+                    if re.search(r"([`'\";]|--{2,})", value):
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {value}", ephemeral=True)
+                        logger.warning(f"Catched SQL inject attempt: {value}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                        return
             try:
                 query = """
                 INSERT INTO `match_history` (
@@ -685,12 +686,21 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
                 cursor.execute(query, parsed_data_dict)
                 new_row_id = cursor.lastrowid
                 conn.commit()
+            except pymysql.IntegrityError as e:
+                if e.args[0] == 1062:
+                    await interaction.response.send_message(f"{MATCH_HISTORY_ADD_DUPLICATE_RECORD_ERROR}: {parsed_data_dict.get("event_name")}", ephemeral=True)
+                    logger.error(f"Insert for match_history_add failed - match already exists: {parsed_data_dict.get("event_name")}; Exception: {e}")
+                    return
+                else:
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                    logger.error(f"Insert for match_history_add failed: {parsed_data_dict}; Exception: {e}; traceback: {traceback.format_exc()}")
+                    return
             except Exception as e:
                 await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                 logger.error(f"Insert for match_history_add failed: {parsed_data_dict}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
             try:
-                cursor.execute("SELECT event_name, `date`, layer, opponent FROM match_history_add WHERE id = %s", (new_row_id,))
+                cursor.execute("SELECT event_name, `date`, layer, opponent FROM match_history WHERE id = %s", (new_row_id,))
                 existing = cursor.fetchone()
             except Exception as e:
                 await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
