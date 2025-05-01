@@ -11,6 +11,7 @@ from translations.ua import *
 import pymysql
 import re
 import requests
+import perms
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
@@ -146,7 +147,7 @@ async def on_ready():
     role2=f"{MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION} {MISSING_MENTIONS_ROLE_DESCRIPTION}.",
     role3=f"{MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION} {MISSING_MENTIONS_ROLE_DESCRIPTION}.",
 )
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*perms.roles.keys())
 async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message_link: str = None, role2: discord.Role = None, role3: discord.Role = None):
     logger.info(f"Received missing_mentions: {message_link}, {[role.name, role2.name if role2 else None, role3.name if role3 else None]}, from user: {ctx.user.name} <@{ctx.user.id}>")
     apollo_id = 475744554910351370
@@ -241,7 +242,7 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
     message_link=f"{GENERATE_ROSTER_PARAMETER_DESCRIPTION}."
     
 )
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*perms.roles.keys())
 async def generate_roster(ctx: discord.Interaction, message_link: str):
     guild = ctx.guild
     emoji_map = {
@@ -366,7 +367,7 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
 @discord.app_commands.describe(
     message_link=f"{MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION}."
 )
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*perms.roles.keys())
 async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
     logger.info(f"Received ping_tentative: {message_link}, from user: {ctx.user.name} <@{ctx.user.id}>")
     apollo_id = 475744554910351370
@@ -412,7 +413,7 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
         discord.app_commands.Choice(name=f"{GRAFANA_IGNORE_VALUE_UNIGNORE}", value=0)
     ]
 )
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*perms.roles.keys())
 async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_id: int = None, name:str = None, steam_id: str = None):
     logger.info(f"Received grafana_ignore: {[ignore, player_id, name, steam_id]}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
@@ -504,7 +505,7 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
 @discord.app_commands.describe(
     name=f"{GRAFANA_INVITE_NAME_VARIABLE}."
 )
-@commands.has_permissions(administrator=True)
+@commands.has_any_role(*perms.roles.keys())
 async def grafana_invite(interaction: discord.Interaction, name:str):
     logger.info(f"Received grafana_invite: {name}, from user: {interaction.user.name} <@{interaction.user.id}>")
 
