@@ -1,28 +1,39 @@
 import discord
-from discord.ext import commands, tasks
+import asyncio
+import random
 import logging
-
+import os
 import pymysql.cursors
-from tokens import DiscordToken, MySQL, Grafana
 import difflib
 import traceback
-from collections import defaultdict
-from translations.ua import *
 import pymysql
 import re
 import requests
-import perms
+from discord.ext import commands, tasks
+from logging.handlers import TimedRotatingFileHandler
+from collections import defaultdict
 from datetime import datetime, time, timedelta
-import asyncio
-from seeding_messages_config import autopost_conf
-import random
+from configs.tokens import DiscordToken, MySQL, Grafana
+from configs.seeding_messages_config import autopost_conf
+from configs import perms
+from translations.ua import *
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
 logger = logging.getLogger("discord")
 logger.setLevel(logging.INFO)
 
-handler = logging.FileHandler(filename='botlogger.log', encoding='utf-8', mode='w')
+os.makedirs("logs", exist_ok=True)
+
+# handler = logging.FileHandler(filename='botlogger.log', encoding='utf-8', mode='w')
+handler = TimedRotatingFileHandler(
+    filename='logs/botlogger.log',
+    when="midnight",
+    interval=1,
+    backupCount=10,
+    encoding='utf-8',
+    utc=True
+)
 
 intents = discord.Intents.default()
 intents.messages = True
@@ -31,6 +42,8 @@ intents.guilds = True
 intents.members = True
 
 autopost_enabled = autopost_conf.get("enabled", False)
+
+message_pool = []
 
 bot = commands.Bot(command_prefix="/", intents=intents)
 
@@ -162,9 +175,13 @@ async def on_ready():
 
 @tasks.loop(hours=24)
 async def daily_autopost():
+    global message_pool
     try:
         target = await bot.fetch_channel(autopost_conf.get("target_id"))
-        message = random.choice(autopost_conf.get("messages"))
+        if not message_pool:
+            message_pool = autopost_conf.get("messages").copy()
+        message = random.choice(message_pool)
+        message_pool.remove(message)
         await target.send(message)
         logger.info(f"[daily_autopost()] Sent the post with message: {message}.")
     except Exception as e:
