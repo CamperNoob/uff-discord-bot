@@ -18,6 +18,8 @@ from configs.tokens import ApolloID as apollo_id
 from configs.seeding_messages_config import autopost_conf
 from configs import perms
 from translations.ua import *
+import csv
+import io
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
@@ -854,5 +856,208 @@ async def server_info(interaction: discord.Interaction, server:str, ping:int = 0
     except Exception as e:
         await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {[server, ping, name, password]}; traceback: {traceback.format_exc()}")
+
+@bot.tree.command(name="grafana_update_match", description=f"{GRAFANA_UPDATE_MATCH_COMMAND_DESCRIPTION}.")
+@discord.app_commands.describe(
+    ignore=f"{GRAFANA_UPDATE_MATCH_IGNORE_VARIABLE}.",
+    match_id=f"{GRAFANA_UPDATE_MATCH_MATCH_ID_VARIABLE}.",
+    name=f"{GRAFANA_UPDATE_MATCH_NAME_VARIABLE}."
+)
+@discord.app_commands.choices(
+    ignore=[
+        discord.app_commands.Choice(name=f"{GRAFANA_IGNORE_VALUE_IGNORE}", value=1),
+        discord.app_commands.Choice(name=f"{GRAFANA_IGNORE_VALUE_UNIGNORE}", value=0)
+    ]
+)
+@commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
+async def grafana_update_match(interaction: discord.Interaction, ignore: int, match_id: int, name:str = None):
+    logger.info(f"Received grafana_update_match: {[ignore, match_id, name]}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    try:
+        conn = get_db_connection()
+    except Exception as e:
+        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
+        return
+    try:
+        with conn.cursor() as cursor:
+            if name:
+                if re.search(r"([`'\";]|--{2,})", name):
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
+                    logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                    return
+                try:
+                    cursor.execute("UPDATE dblog_matches SET `ignore` = %s, `displayName` = %s WHERE id = %s", (ignore, name, match_id))
+                    conn.commit()
+                    cursor.execute("SELECT id, `displayName`, `layerClassname`, `ignore` FROM dblog_matches WHERE id = %s", (match_id))
+                    updated = cursor.fetchone()
+                    if not updated:
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_NO_ID_FOUND}: {match_id}", ephemeral=True)
+                        return
+                    updated_ignore = GRAFANA_IGNORE_IGNORED if updated['ignore'] == 1 else GRAFANA_IGNORE_UNIGNORED
+                    await interaction.response.send_message(
+                    f"### {GRAFANA_UPDATE_MATCH_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_UPDATE_MATCH_NAME_STR}: `{updated['displayName']}`,\n- {GRAFANA_UPDATE_MATCH_MAP_STR}: `{updated['layerClassname']}`,\n- {GRAFANA_IGNORE_STATUS_STR}: `{updated_ignore}`.",
+                    ephemeral=False
+                    )
+                except Exception as e:
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                    logger.error(f"Select and update query failed for id: {match_id}; Exception: {e}; traceback: {traceback.format_exc()}")
+                    return
+            else:
+                try:
+                    cursor.execute("UPDATE dblog_matches SET `ignore` = %s WHERE id = %s", (ignore, match_id))
+                    conn.commit()
+                    cursor.execute("SELECT id, `displayName`, `layerClassname`, `ignore` FROM dblog_matches WHERE id = %s", (match_id))
+                    updated = cursor.fetchone()
+                    if not updated:
+                        await interaction.response.send_message(f"{GRAFANA_IGNORE_NO_ID_FOUND}: {match_id}", ephemeral=True)
+                        return
+                    updated_ignore = GRAFANA_IGNORE_IGNORED if updated['ignore'] == 1 else GRAFANA_IGNORE_UNIGNORED
+                    await interaction.response.send_message(
+                    f"### {GRAFANA_UPDATE_MATCH_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_UPDATE_MATCH_NAME_STR}: `{updated['displayName']}`,\n- {GRAFANA_UPDATE_MATCH_MAP_STR}: `{updated['layerClassname']}`,\n- {GRAFANA_IGNORE_STATUS_STR}: `{updated_ignore}`.",
+                    ephemeral=False
+                    )
+                except Exception as e:
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                    logger.error(f"Select and update query failed for id: {match_id}; Exception: {e}; traceback: {traceback.format_exc()}")
+                    return
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {ignore}, {match_id}, {name}; traceback: {traceback.format_exc()}")
+    finally:
+        conn.close()
+
+@bot.tree.command(name="grafana_add_match", description=f"{GRAFANA_ADD_MATCH_DESCRIPTION}.")
+@discord.app_commands.describe(
+    name=f"{GRAFANA_ADD_MATCH_NAME_VARIABLE}.",
+    map=f"{GRAFANA_ADD_MATCH_MAP_VARIABLE}.",
+    date=f"{GRAFANA_ADD_MATCH_DATE_VARIABLE}."
+)
+@commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
+async def grafana_add_match(interaction: discord.Interaction, name:str, map:str, date:str):
+    logger.info(f"Received grafana_add_match: {[name, map, date]}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    try:
+        conn = get_db_connection()
+    except Exception as e:
+        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
+        return
+    try:
+        with conn.cursor() as cursor:
+            if re.search(r"([`'\";]|--{2,})", name):
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
+                logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                return
+            if re.search(r"([`'\";]|--{2,})", map):
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {map}", ephemeral=True)
+                logger.warning(f"Catched SQL inject attempt: {map}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                return
+            if re.search(r"([`'\";]|--{2,})", date):
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {map}", ephemeral=True)
+                logger.warning(f"Catched SQL inject attempt: {date}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                return
+            try:
+                parse_date_check = datetime.strptime(date, "%Y-%m-%d %H:%M")
+            except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_ADD_MATCH_INVALID_DATE_FORMAT}", ephemeral=True)
+                logger.warning(f"Invalid date format received for grafana_add_match: {date}; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+            try:
+                cursor.execute("call sp_newMatch(%s, %s, 'UFF', %s)", (map, date, name))
+                result = cursor.fetchone()
+                conn.commit()
+                new_id = list(result.values())[0]
+                cursor.execute("SELECT id, `displayName`, `layerClassname` FROM dblog_matches WHERE id = %s", (new_id))
+                updated = cursor.fetchone()
+                if not updated:
+                    await interaction.response.send_message(f"{GRAFANA_IGNORE_NO_ID_FOUND}: {new_id}", ephemeral=True)
+                    return
+                await interaction.response.send_message(
+                f"### {GRAFANA_ADD_MATCH_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_UPDATE_MATCH_NAME_STR}: `{updated['displayName']}`,\n- {GRAFANA_UPDATE_MATCH_MAP_STR}: `{updated['layerClassname']}`.",
+                ephemeral=False
+                )
+            except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                logger.error(f"Select and update query failed for args: {[name, map, date]}; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {[name, map, date]}; traceback: {traceback.format_exc()}")
+    finally:
+        conn.close()
+
+@bot.tree.command(name="grafana_add_stats", description=f"{GRAFANA_ADD_STATS_DESCRIPTION}.")
+@discord.app_commands.describe(
+    match_id=f"{GRAFANA_UPDATE_MATCH_MATCH_ID_VARIABLE}.",
+    data=f"{GRAFANA_ADD_STATS_DATA_DESCRIPTION}."
+)
+@commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
+async def grafana_add_stats(interaction: discord.Interaction, match_id:int, data: discord.Attachment):
+    # await interaction.response.defer(thinking=True)  # Tells Discord you're processing
+    logger.info(f"Received grafana_add_stats: {match_id}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    if not data.filename.lower().endswith(".csv"):
+        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_NOT_CSV}", ephemeral=True)
+        logger.error(f"Got a file not in csv format: {data.filename}")
+        return
+    try:
+        file_bytes = await data.read()
+        decoded = file_bytes.decode('utf-8')  # or 'utf-8-sig' if Excel exports with BOM
+        # Use csv.Sniffer to detect the delimiter
+        sample = decoded[:1024]
+        sniffer = csv.Sniffer()
+        dialect = sniffer.sniff(sample, delimiters=[',', ';'])
+        # Read the CSV using the detected dialect
+        reader = csv.reader(io.StringIO(decoded), dialect)
+        csv_data = list(reader)
+    except Exception as e:
+        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_PARSING_CSV}", ephemeral=True)
+        logger.error(f"Failed to parse csv: {e}; traceback: {traceback.format_exc()}")
+        return
+    if not csv_data:
+        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_EMPTY_CSV}", ephemeral=True)
+        logger.warning(f"Empty csv file.")
+        return
+    query_list = []
+    try:
+        for line in csv_data:
+            if re.search(r"([`'\";]|--{2,})", line[0]):
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {line[0]}", ephemeral=True)
+                logger.warning(f"Catched SQL inject attempt: {line[0]}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
+                return
+            query_list.append(
+                f"call sp_addKDWR({match_id}, fn_getsteamidfromname('{line[0]}'), {line[1]}, {line[2]}, {line[3]}, {line[4]}, {line[5]})"
+            )
+    except Exception as e:
+        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_FAILED_TO_PARSE_CSV}", ephemeral=True)
+        logger.error(f"Failed to parse csv: {e}; traceback: {traceback.format_exc()}")
+        return
+    if not query_list:
+        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_GETTING_QUERIES}", ephemeral=True)
+        logger.warning(f"Empty query list from csv file.")
+        return
+    try:
+        conn = get_db_connection()
+    except Exception as e:
+        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
+        return
+    try:
+        with conn.cursor() as cursor:
+            try:
+                for query in query_list:
+                    cursor.execute(query)
+                    conn.commit()
+                await interaction.response.send_message(
+                f"### {GRAFANA_ADD_STATS_SUCCESS}:\n -{GRAFANA_ADD_STATS_MATCH_ID_STR}: `{match_id}` \n -{GRAFANA_ADD_STATS_QUERIES_STR}:\n```{'\n'.join(query_list)}```",
+                ephemeral=False
+                )
+            except Exception as e:
+                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                logger.error(f"Select and update query failed for args: {[match_id, query_list]}; Exception: {e}; traceback: {traceback.format_exc()}")
+                return
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {match_id}; traceback: {traceback.format_exc()}")
+    finally:
+        conn.close()
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
