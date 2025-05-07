@@ -13,7 +13,8 @@ from discord.ext import commands, tasks
 from logging.handlers import TimedRotatingFileHandler
 from collections import defaultdict
 from datetime import datetime, time, timedelta
-from configs.tokens import DiscordToken, MySQL, Grafana
+from configs.tokens import DiscordToken, MySQL, Grafana, Servers
+from configs.tokens import ApolloID as apollo_id
 from configs.seeding_messages_config import autopost_conf
 from configs import perms
 from translations.ua import *
@@ -206,7 +207,6 @@ async def before_daily_autopost():
 @commands.has_any_role(*perms.roles.values())
 async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message_link: str = None, role2: discord.Role = None, role3: discord.Role = None):
     logger.info(f"Received missing_mentions: {message_link}, {[role.name, role2.name if role2 else None, role3.name if role3 else None]}, from user: {ctx.user.name} <@{ctx.user.id}>")
-    apollo_id = 475744554910351370
     try:
         if not message_link:
             async for message in ctx.channel.history(limit=None, oldest_first=True):
@@ -426,7 +426,6 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
 @commands.has_any_role(*perms.roles.values())
 async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
     logger.info(f"Received ping_tentative: {message_link}, from user: {ctx.user.name} <@{ctx.user.id}>")
-    apollo_id = 475744554910351370
     try:
         if not message_link:
             async for message in ctx.channel.history(limit=None, oldest_first=True):
@@ -800,5 +799,60 @@ async def autopost_enable(interaction: discord.Interaction, status:int):
     except Exception as e:
         await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {status}; traceback: {traceback.format_exc()}")
+
+@bot.tree.command(name="server_info", description=f"{SERVER_INFO_DESCRIPTION}.")
+@discord.app_commands.describe(
+    server=f"{SERVER_INFO_SERVER}.",
+    ping=f"{SERVER_INFO_PING}.",
+    name=f"{SERVER_INFO_NAME}.",
+    password=f"{SERVER_INFO_PASSWORD}."
+)
+@discord.app_commands.choices(
+    server=[
+        discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_SCRIMS}", value="scrims"),
+        discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_TRAINING}", value="training"),
+        discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_TEST}", value="test"),
+        discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_CUSTOM}", value="")
+    ],
+    ping=[
+        discord.app_commands.Choice(name=f"{SERVER_INFO_PING_TRUE}", value=1),
+        discord.app_commands.Choice(name=f"{SERVER_INFO_PING_FALSE}", value=0)
+    ]
+)
+@commands.has_any_role(*perms.roles.values())
+async def server_info(interaction: discord.Interaction, server:str, ping:int = 0, name:str = None, password:str = None):
+    logger.info(f"Received server_info: {[server,ping,name,password]}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    try:
+        server_details = Servers.get(server, {})
+        if not server_details and not name and not password:
+            await interaction.response.send_message(f"{SERVER_INFO_ERROR_NO_INFO}.", ephemeral=True)
+            logger.error(f"server_info failed: no server details were provided: {server_details}, {name}, {password}")
+        response = f"# {SERVER_INFO_SERVER_STR}: ```{server_details.get("name", name)}``` \n # {SERVER_INFO_PASS_STR}: ```{server_details.get("pass", password)}``` \n"
+        if ping == 1:
+            try:
+                async for message in interaction.channel.history(limit=None, oldest_first=True):
+                    if message.author.id == apollo_id:
+                        message_link = f"https://discord.com/channels/{interaction.guild.id}/{interaction.channel.id}/{message.id}"
+                        break
+                    if not message_link:
+                        response += f" || {SERVER_INFO_ERROR_FAILED_TO_GET_PINGS} - {SERVER_INFO_APOLLO_NOT_FOUND}|| "
+                message = await fetch_message_from_url(interaction, message_link)
+                if not message:
+                    return
+                mentioned_ids = []
+                for field in message.embeds[0].fields:
+                    if field.value[:6] != '>>> <@':
+                        continue
+                    mentions = field.value[4:].replace('<@', '').replace('>', '')
+                    mentioned_ids.extend([int(m) for m in mentions.split('\n') if m])
+                ping_str = " ".join(f"<@{member}>" for member in mentioned_ids)
+                response += f" || {ping_str} || "
+            except Exception as e:
+                logger.warning(f"server_info failed to add pings: {e}; traceback: {traceback.format_exc()}")
+                response += f" || {SERVER_INFO_ERROR_FAILED_TO_GET_PINGS} || "
+        await interaction.response.send_message(f"{SERVER_INFO_SUCCESS}:\n{response}", ephemeral=False)
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {[server, ping, name, password]}; traceback: {traceback.format_exc()}")
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)

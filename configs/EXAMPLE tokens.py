@@ -10,3 +10,18 @@ Grafana = {
     "url": "https://grafana.url.link/",
     "token": ""
 }
+Servers = {
+    "scrims": {
+        "name": "uff scrims",
+        "pass": "123456"
+    },
+    "training": {
+        "name": "uff training",
+        "pass": "654321"
+    },
+    "test": {
+        "name": "uff test",
+        "pass": "123654"
+    }
+}
+ApolloID = 1234567890
