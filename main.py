@@ -843,10 +843,9 @@ async def server_info(interaction: discord.Interaction, server:str, ping:int = 0
                     return
                 mentioned_ids = []
                 for field in message.embeds[0].fields:
-                    if field.value[:6] != '>>> <@':
-                        continue
-                    mentions = field.value[4:].replace('<@', '').replace('>', '')
-                    mentioned_ids.extend([int(m) for m in mentions.split('\n') if m])
+                    if field.name[:10] == '<:accepted' and field.value[:6] == '>>> <@':
+                        mentions = field.value[4:].replace('<@', '').replace('>', '')
+                        mentioned_ids.extend([int(m) for m in mentions.split('\n') if m])
                 ping_str = " ".join(f"<@{member}>" for member in mentioned_ids)
                 response += f" || {ping_str} || "
             except Exception as e:
