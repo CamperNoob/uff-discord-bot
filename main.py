@@ -885,7 +885,7 @@ async def grafana_update_match(interaction: discord.Interaction, ignore: int, ma
                     logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
                     return
                 try:
-                    cursor.execute("UPDATE dblog_matches SET `ignore` = %s, `displayName` = %s WHERE id = %s", (ignore, name, match_id))
+                    cursor.execute("UPDATE dblog_matches SET `ignore` = %s, `winner` = %s, `displayName` = %s WHERE id = %s", (ignore, 'UFF' if ignore == 0 else None, name, match_id))
                     conn.commit()
                     cursor.execute("SELECT id, `displayName`, `layerClassname`, `ignore` FROM dblog_matches WHERE id = %s", (match_id))
                     updated = cursor.fetchone()
@@ -903,7 +903,7 @@ async def grafana_update_match(interaction: discord.Interaction, ignore: int, ma
                     return
             else:
                 try:
-                    cursor.execute("UPDATE dblog_matches SET `ignore` = %s WHERE id = %s", (ignore, match_id))
+                    cursor.execute("UPDATE dblog_matches SET `ignore` = %s, `winner` = %s WHERE id = %s", (ignore, 'UFF' if ignore == 0 else None, match_id))
                     conn.commit()
                     cursor.execute("SELECT id, `displayName`, `layerClassname`, `ignore` FROM dblog_matches WHERE id = %s", (match_id))
                     updated = cursor.fetchone()
