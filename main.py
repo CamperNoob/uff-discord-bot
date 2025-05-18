@@ -560,10 +560,11 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
 
 @bot.tree.command(name="grafana_invite", description=f"{GRAFANA_INVITE_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
-    name=f"{GRAFANA_INVITE_NAME_VARIABLE}."
+    name=f"{GRAFANA_INVITE_NAME_VARIABLE}.",
+    email=f"{GRAFANA_INVITE_EMAIL_VARIABLE}."
 )
 @commands.has_any_role(*perms.roles.values())
-async def grafana_invite(interaction: discord.Interaction, name:str):
+async def grafana_invite(interaction: discord.Interaction, name:str, email:str = None):
     logger.info(f"Received grafana_invite: {name}, from user: {interaction.user.name} <@{interaction.user.id}>")
 
     def check_invites(data:list, name:str) -> tuple[bool, str]:
@@ -583,11 +584,11 @@ async def grafana_invite(interaction: discord.Interaction, name:str):
         "Content-Type": "application/json"
     }
     data = {
-        "email": f"",
+        "email": f"{email}",
         "loginOrEmail": name,
         "name": name,
         "role": "Viewer",
-        "sendEmail": False,
+        "sendEmail": True if email else False,
     }
     try:
         try:

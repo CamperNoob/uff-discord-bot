@@ -66,6 +66,7 @@ GRAFANA_IGNORE_STATUS_STR = "Status"
 
 GRAFANA_INVITE_COMMAND_DESCRIPTION = 'Creates invite link for Grafana'
 GRAFANA_INVITE_NAME_VARIABLE = "User name for invite"
+GRAFANA_INVITE_EMAIL_VARIABLE = "Email of user for invite"
 GRAFANA_INVITE_GENERIC_HTTP_FAIL = f"{ERROR_GENERIC}: Grafana error. Please try again or contact administrator"
 GRAFANA_INVITE_SUCCESS = 'Invite link created successfully'
 GRAFANA_INVITE_USER_ALREADY_EXISTS = f"{ERROR_GENERIC}: User already exists in Grafana with name"
