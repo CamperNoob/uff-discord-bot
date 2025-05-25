@@ -16,7 +16,7 @@ from datetime import datetime, time, timedelta
 from configs.tokens import DiscordToken, MySQL, Grafana, Servers
 from configs.tokens import ApolloID as apollo_id
 from configs.seeding_messages_config import autopost_conf
-from configs import perms
+from configs.perms import unpack_conf, unpack_matching_conf, unpack_matching
 from translations.ua import *
 import csv
 import io
@@ -206,7 +206,7 @@ async def before_daily_autopost():
     role2=f"{MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION} {MISSING_MENTIONS_ROLE_DESCRIPTION}.",
     role3=f"{MISSING_MENTIONS_ADDITIONAL_ROLE_DESCRIPTION} {MISSING_MENTIONS_ROLE_DESCRIPTION}.",
 )
-@commands.has_any_role(*perms.roles.values())
+@commands.has_any_role(*unpack_conf())
 async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message_link: str = None, role2: discord.Role = None, role3: discord.Role = None):
     logger.info(f"Received missing_mentions: {message_link}, {[role.name, role2.name if role2 else None, role3.name if role3 else None]}, from user: {ctx.user.name} <@{ctx.user.id}>")
     try:
@@ -300,7 +300,7 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
     message_link=f"{GENERATE_ROSTER_PARAMETER_DESCRIPTION}."
     
 )
-@commands.has_any_role(*perms.roles.values())
+@commands.has_any_role(*unpack_conf())
 async def generate_roster(ctx: discord.Interaction, message_link: str):
     guild = ctx.guild
     emoji_map = {
@@ -425,7 +425,7 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
 @discord.app_commands.describe(
     message_link=f"{MISSING_MENTIONS_MESSAGE_LINK_DESCRIPTION}."
 )
-@commands.has_any_role(*perms.roles.values())
+@commands.has_any_role(*unpack_conf())
 async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
     logger.info(f"Received ping_tentative: {message_link}, from user: {ctx.user.name} <@{ctx.user.id}>")
     try:
@@ -470,7 +470,7 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
         discord.app_commands.Choice(name=f"{GRAFANA_IGNORE_VALUE_UNIGNORE}", value=0)
     ]
 )
-@commands.has_any_role(*perms.roles.values())
+@commands.has_any_role(*unpack_conf())
 async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_id: int = None, name:str = None, steam_id: str = None):
     logger.info(f"Received grafana_ignore: {[ignore, player_id, name, steam_id]}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
@@ -563,7 +563,7 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
     name=f"{GRAFANA_INVITE_NAME_VARIABLE}.",
     email=f"{GRAFANA_INVITE_EMAIL_VARIABLE}."
 )
-@commands.has_any_role(*perms.roles.values())
+@commands.has_any_role(*unpack_conf())
 async def grafana_invite(interaction: discord.Interaction, name:str, email:str = None):
     logger.info(f"Received grafana_invite: {name}, from user: {interaction.user.name} <@{interaction.user.id}>")
 
@@ -650,7 +650,7 @@ async def grafana_invite(interaction: discord.Interaction, name:str, email:str =
 @discord.app_commands.describe(
     data=f"{MATCH_HISTORY_ADD_PARAMETER_DESCRIPTION}"
 )
-@commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
+@commands.has_any_role(*unpack_matching_conf()) # only for sectorial | глава
 async def match_history_add(interaction: discord.Interaction, data:str): # data: mm.dd.yyyy;csl_yehv1;SLS;-;100/0;120/23;discord.gg/channel/1231313;youtube;tactics
     logger.info(f"Received match_history_add: {data}, from user: {interaction.user.name} <@{interaction.user.id}>")
     parse_data = data.split(';')
@@ -783,7 +783,7 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
         discord.app_commands.Choice(name=f"{AUTOPOST_ENABLE_STATUS_DISABLED}", value=0)
     ]
 )
-@commands.has_any_role(*perms.roles.values())
+@commands.has_any_role(*unpack_matching(("UFF", "sectorial")))
 async def autopost_enable(interaction: discord.Interaction, status:int):
     logger.info(f"Received autopost_enable: {status}, from user: {interaction.user.name} <@{interaction.user.id}>")
     global autopost_enabled
@@ -822,7 +822,7 @@ async def autopost_enable(interaction: discord.Interaction, status:int):
         discord.app_commands.Choice(name=f"{SERVER_INFO_PING_FALSE}", value=0)
     ]
 )
-@commands.has_any_role(*perms.roles.values())
+@commands.has_any_role(*unpack_conf())
 async def server_info(interaction: discord.Interaction, server:str, ping:int = 0, name:str = None, password:str = None):
     logger.info(f"Received server_info: {[server,ping,name,password]}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
@@ -869,7 +869,7 @@ async def server_info(interaction: discord.Interaction, server:str, ping:int = 0
         discord.app_commands.Choice(name=f"{GRAFANA_IGNORE_VALUE_UNIGNORE}", value=0)
     ]
 )
-@commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
+@commands.has_any_role(*unpack_matching_conf()) # only for sectorial | глава
 async def grafana_update_match(interaction: discord.Interaction, ignore: int, match_id: int, name:str = None):
     logger.info(f"Received grafana_update_match: {[ignore, match_id, name]}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
@@ -932,7 +932,7 @@ async def grafana_update_match(interaction: discord.Interaction, ignore: int, ma
     map=f"{GRAFANA_ADD_MATCH_MAP_VARIABLE}.",
     date=f"{GRAFANA_ADD_MATCH_DATE_VARIABLE}."
 )
-@commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
+@commands.has_any_role(*unpack_matching_conf()) # only for sectorial | глава
 async def grafana_add_match(interaction: discord.Interaction, name:str, map:str, date:str):
     logger.info(f"Received grafana_add_match: {[name, map, date]}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
@@ -990,7 +990,7 @@ async def grafana_add_match(interaction: discord.Interaction, name:str, map:str,
     match_id=f"{GRAFANA_UPDATE_MATCH_MATCH_ID_VARIABLE}.",
     data=f"{GRAFANA_ADD_STATS_DATA_DESCRIPTION}."
 )
-@commands.has_any_role(perms.roles.get("sectorial", 1348729616352804976)) # only for sectorial with default fallback
+@commands.has_any_role(*unpack_matching_conf()) # only for sectorial | глава
 async def grafana_add_stats(interaction: discord.Interaction, match_id:int, data: discord.Attachment):
     # await interaction.response.defer(thinking=True)  # Tells Discord you're processing
     logger.info(f"Received grafana_add_stats: {match_id}, from user: {interaction.user.name} <@{interaction.user.id}>")
