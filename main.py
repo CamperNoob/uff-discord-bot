@@ -585,7 +585,7 @@ async def grafana_invite(interaction: discord.Interaction, name:str, email:str =
     }
     data = {
         "email": f"{email}",
-        "loginOrEmail": name,
+        "loginOrEmail": email if email else name,
         "name": name,
         "role": "Viewer",
         "sendEmail": True if email else False,
