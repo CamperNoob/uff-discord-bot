@@ -592,7 +592,9 @@ async def grafana_invite(interaction: discord.Interaction, name:str, email:str =
     }
 
     # check email
-    def is_valid_email(email: str) -> bool:
+    def is_valid_email(email) -> bool:
+        if not email:
+            return False
         pattern = r'^[\w\.-]+@(?:[\w-]+\.)[\w]{1,24}$'
         return re.match(pattern, email) is not None
     email = email if is_valid_email(email) else None
