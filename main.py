@@ -561,10 +561,17 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
 @bot.tree.command(name="grafana_invite", description=f"{GRAFANA_INVITE_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
     name=f"{GRAFANA_INVITE_NAME_VARIABLE}.",
-    email=f"{GRAFANA_INVITE_EMAIL_VARIABLE}."
+    email=f"{GRAFANA_INVITE_EMAIL_VARIABLE}.",
+    caster=f"{GRAFANA_INVITE_CASTER_VARIABLE}."
+)
+@discord.app_commands.choices(
+    caster=[
+        discord.app_commands.Choice(name=f"{GRAFANA_INVITE_CASTER_VARIABLE_TRUE}", value=1),
+        discord.app_commands.Choice(name=f"{GRAFANA_INVITE_CASTER_VARIABLE_FALSE}", value=0)
+    ]
 )
 @commands.has_any_role(*unpack_conf())
-async def grafana_invite(interaction: discord.Interaction, name:str, email:str = None):
+async def grafana_invite(interaction: discord.Interaction, name:str, email:str = None, caster:int = 0):
     logger.info(f"Received grafana_invite: {name}, from user: {interaction.user.name} <@{interaction.user.id}>")
 
     def check_invites(data:list, name:str) -> tuple[bool, str]:
@@ -594,7 +601,7 @@ async def grafana_invite(interaction: discord.Interaction, name:str, email:str =
         "email": f"{email}",
         "loginOrEmail": email if email else name,
         "name": name,
-        "role": "Viewer",
+        "role": "Editor" if caster == 1 else "Viewer",
         "sendEmail": True if email else False,
     }
     try:

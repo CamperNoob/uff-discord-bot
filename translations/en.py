@@ -70,6 +70,9 @@ GRAFANA_INVITE_EMAIL_VARIABLE = "Email of user for invite"
 GRAFANA_INVITE_GENERIC_HTTP_FAIL = f"{ERROR_GENERIC}: Grafana error. Please try again or contact administrator"
 GRAFANA_INVITE_SUCCESS = 'Invite link created successfully'
 GRAFANA_INVITE_USER_ALREADY_EXISTS = f"{ERROR_GENERIC}: User already exists in Grafana with name"
+GRAFANA_INVITE_CASTER_VARIABLE = f"Permissions to Live Killfeed"
+GRAFANA_INVITE_CASTER_VARIABLE_TRUE = f"Yes"
+GRAFANA_INVITE_CASTER_VARIABLE_FALSE = f"No"
 
 MATCH_HISTORY_ADD_DESCRIPTION = 'Adds match record into match history table of Grafana'
 MATCH_HISTORY_ADD_PARAMETER_DESCRIPTION = 'day.month.year;layer;opponent;mercs;tickers/opp R1;tickets/opp R2;link to event;vods;tactics'
