@@ -379,11 +379,11 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
             line_list = []
             for item in linesplit:
                 if item.startswith('@'):
-                    member_id = guild_members.get(item[1:].lower())
+                    member_id = guild_members.get(item[1:].lower().strip())
                     if member_id:
                         line_list.append(f"<@{member_id}> ")
                     else:
-                        matches = guild_members_display_names.get(item[1:].lower())
+                        matches = guild_members_display_names.get(item[1:].lower().strip())
                         if not matches:
                             line_list.append(f"{item} ")
                         elif len(matches) == 1:
@@ -394,15 +394,15 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
                 elif item.startswith('<@') and item.endswith('>'):
                     line_list.append(f"{item} ")
                 elif item.startswith('~'):
-                    color_value = emoji_map.get(item[1:].lower())
+                    color_value = emoji_map.get(item[1:].lower().strip())
                     if color_value:
-                        line_list.append(f"\n**{item[1:]}** {color_value} ")
+                        line_list.append(f"\n**{item[1:].strip()}** {color_value} ")
                     elif not item[1:] or item[1:] == ' ':
                         line_list.append(f" ")
                     else:
                         line_list.append(f"**{item[1:]}** ")
                 else:
-                    value_str = emoji_map.get(item.lower())
+                    value_str = emoji_map.get(item.lower().strip())
                     if value_str:
                         line_list.append(f"{value_str} ")
                     else:
