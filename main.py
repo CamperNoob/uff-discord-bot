@@ -267,7 +267,7 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
     try:
         if not message_link:
             async for message in ctx.channel.history(limit=None, oldest_first=True):
-                if message.content.startswith("~"):
+                if message.content.startswith("~") or message.content.startswith(f'{GENERATE_ROSTER_SUCCESS}:'):
                     message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
                     break
             if not message_link:
