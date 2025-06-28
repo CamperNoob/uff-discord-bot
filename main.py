@@ -344,6 +344,7 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
         'orange':'🟧',
         'оранж':'🟧',
         'оранжевий':'🟧',
+        'помаранчевий':'🟧',
         'black':'⬛',
         'чорний':'⬛',
         'brown':'🟫',
