@@ -12,7 +12,7 @@ import requests
 from discord.ext import commands, tasks
 from logging.handlers import TimedRotatingFileHandler
 from collections import defaultdict
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from configs.tokens import DiscordToken, MySQL, Grafana, Servers
 from configs.tokens import ApolloID as apollo_id
 from configs.seeding_messages_config import autopost_conf
@@ -109,6 +109,15 @@ async def missing_voice_handler(ctx: discord.Interaction, channel_name: str, mes
         if not message:
             return
         mentioned_ids = [mention.id for mention in message.mentions]
+        if not mentioned_ids:
+            mentioned_ids = []
+            try:
+                for field in message.embeds[0].fields:
+                    if field.name[:10] == '<:accepted' and field.value[:6] == '>>> <@':
+                        mentions = field.value[4:].replace('<@', '').replace('>', '')
+                        mentioned_ids.extend([int(m) for m in mentions.split('\n') if m])
+            except Exception:
+                return
         if not mentioned_ids:
             await ctx.followup.send(f"{MISSING_VOICE_ERROR_NO_MEMBERS}: {message_link}", ephemeral=True)
             return
@@ -273,6 +282,11 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
                 if message.content.startswith("~") or message.content.startswith(f'{GENERATE_ROSTER_SUCCESS}:'):
                     message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
                     break
+            if not message_link:
+                async for message in ctx.channel.history(limit=1, oldest_first=True):
+                    if message.author.id == apollo_id:
+                        message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
+                        break
             if not message_link:
                 await ctx.response.send_message(f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_VOICE_CANNOT_FIND_MESSAGE}.", ephemeral=True)
                 return
@@ -1089,5 +1103,115 @@ async def grafana_add_stats(interaction: discord.Interaction, match_id:int, data
         logger.error(f"{ERROR_GENERIC}: {e}; args: {match_id}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
+
+
+@bot.tree.command(name="count_attendance", description=f"{COUNT_ATTENDANCE_DESCRIPTION}.")
+@discord.app_commands.describe(
+    category=f"{COUNT_ATTENDANCE_CATEGORY_VARIABLE}.",
+    user=f"{COUNT_ATTENDANCE_USER_VARIABLE}.",
+    check_from=f"{COUNT_ATTENDANCE_CHECK_FROM_VARIABLE}."
+)
+@commands.has_any_role(*unpack_conf())
+@commands.guild_only()
+async def count_attendance(interaction: discord.Interaction, category: discord.CategoryChannel, user: discord.Member, check_from: str = None):
+    logger.info(f"Received count_attendance: {category.name}, {user.display_name}, {check_from}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    if not check_from:
+            check_from = datetime.now(timezone.utc) - timedelta(days=31)
+    else:
+        try:
+            check_from = datetime.strptime(check_from, "%d.%m.%Y").replace(tzinfo=timezone.utc)
+        except Exception:
+            await interaction.response.send_message(f"{COUNT_ATTENDANCE_ERROR_CANNOT_CONVERT_TO_TIMESTAMP}: {check_from}", ephemeral=True)
+            return
+    channels = [
+        channel for channel in category.channels
+        if isinstance(channel, (discord.TextChannel)) and channel.created_at >= (check_from - timedelta(days=7))
+    ]
+    if not channels:
+        await interaction.response.send_message(f"{COUNT_ATTENDANCE_ERROR_NO_CHANNELS}: {category.name}, {COUNT_ATTENDANCE_ERROR_NO_CHANNELS_CREATED_AFTER} <t:{int((check_from - timedelta(days=7)).timestamp())}:D>", ephemeral=True)
+        return # no channels found
+    try:
+        initial_response = COUNT_ATTENDANCE_THINKING.format(
+            user=user.mention,
+            category=category.name,
+            date=int(check_from.timestamp())
+        )
+        await interaction.response.send_message(f"{initial_response} {discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=False)
+        initial_message = await interaction.original_response()
+        attendance = {}
+        channel_count = 0
+        for channel in channels:
+            async for message in channel.history(limit=1, oldest_first=True):
+                if message.author.id == apollo_id:
+                    message_link = f"https://discord.com/channels/{interaction.guild.id}/{channel.id}/{message.id}"
+            message = await fetch_message_from_url(interaction, message_link)
+            if not message:
+                continue    # skip channel if no apollo message found
+            event_date_field = message.embeds[0].fields[0].value
+            match = re.search(r"<t:(\d+):", event_date_field)
+            if match:
+                event_date = datetime.fromtimestamp(int(match.group(1))).replace(tzinfo=timezone.utc)
+            else:
+                continue # can't find event date, so skipping it
+            if check_from > event_date:
+                continue # older event, skipping
+            channel_count += 1 # only processable events are counted
+            for field in message.embeds[0].fields:
+                if field.name.startswith('<t:'):
+                    continue # skipping 'Time' field
+                if user.mention in field.value:
+                    field_name_clean_match = re.search(r"[^\s]+?\s+(.+?)\s*\(\d+\)", field.name)
+                    if field_name_clean_match:
+                        key = field_name_clean_match.group(1)
+                    else:
+                        key = field.name.strip()
+                    if key not in attendance:
+                        attendance[key] = []
+                    attendance[key].append(f"https://discord.com/channels/{interaction.guild.id}/{channel.id}")
+        if attendance:
+            # output = f"Since <t:{int(check_from.timestamp())}:D>, were {channel_count} events. User {user.mention} was in:"
+            output = COUNT_ATTENDANCE_OUTPUT_TEMPLATE.format(
+                date=int(check_from.timestamp()),
+                count=channel_count,
+                user=user.mention,
+                was=COUNT_ATTENDANCE_WAS
+            )
+            for key, value in attendance.items():
+                output += f"\n- **{key}**: {len(value)} {COUNT_ATTENDANCE_TIMES}:\n{'\n'.join(value)}"
+        else:
+            # output = f"Since <t:{int(check_from.timestamp())}:D>, were {channel_count} events. User {user.mention} did not attend any events"
+            if channel_count > 0:
+                output = COUNT_ATTENDANCE_OUTPUT_TEMPLATE.format(
+                    date=int(check_from.timestamp()),
+                    count=channel_count,
+                    user=user.mention,
+                    was=COUNT_ATTENDANCE_WAS_NOT
+                )
+            else:
+                output = COUNT_ATTENDANCE_OUTPUT_TEMPLATE_NO_EVENTS.format(
+                    date=int(check_from.timestamp())
+                )
+        await initial_message.edit(content=f"{output}")
+    except Exception as e:
+        if isinstance(e, discord.Forbidden):
+            error_text = f"{ERROR_NO_PERMISSION} `{category.name}`"
+        else:
+            error_text = f"{ERROR_GENERIC}: {e}"
+        try:    # delete 'thinking' message
+            await initial_message.delete()
+        except Exception as ee:
+            logger.error(f"Wasn't able to delete initial message: {ERROR_GENERIC}: {ee}; args: {category.name}, {user.display_name}, {check_from}; traceback: {traceback.format_exc()}")
+        try:    # respond with ephemeral message
+            await interaction.response.send_message(f"{error_text}", ephemeral=True)
+        except Exception as ee:
+            logger.info(f"Wasn't able to respond to original interaction: {ee}; args: {category.name}, {user.display_name}, {check_from}")
+            try:    # if can't respond to interaction - send another message
+                logger.info("third try block")
+                await interaction.followup.send(f"{error_text}", ephemeral=True)
+            except Exception as ee:
+                logger.error(f"Wasn't able to respond as a followup: {ERROR_GENERIC}: {ee}; args: {category.name}, {user.display_name}, {check_from}; traceback: {traceback.format_exc()}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {category.name}, {user.display_name}, {check_from}; traceback: {traceback.format_exc()}")
+        return
+    return
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
