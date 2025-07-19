@@ -1214,4 +1214,54 @@ async def count_attendance(interaction: discord.Interaction, category: discord.C
         return
     return
 
+@bot.tree.command(name="copy_role", description=f"{COPY_ROLE_DESCRIPTION}.")
+@discord.app_commands.describe(
+    role_from=f"{COPY_ROLE_ROLE_FROM}.",
+    role_to=f"{COPY_ROLE_ROLE_TO}."
+)
+@commands.has_any_role(*unpack_matching_conf())
+@commands.guild_only()
+async def copy_role(interaction: discord.Interaction, role_from: discord.Role, role_to: str = None):
+    logger.info(f"Received copy_role: {role_from.name}, {role_to}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    if not role_to:
+            role_to = f"{role_from.name}_copy"
+    try:
+        new_role = await interaction.guild.create_role(name=role_to)
+        await new_role.edit(permissions=role_from.permissions)
+        error_list = []
+        for category in interaction.guild.categories:
+            overwrites = category.overwrites_for(role_from)
+            if overwrites != discord.PermissionOverwrite():
+                try:
+                    await category.set_permissions(new_role, overwrite=overwrites)
+                except discord.Forbidden:
+                    logger.warning(f"{COPY_ROLE_ERROR_NO_PERM_CATEGORY} '{category.name}'")
+                    error_list.append(f"{COPY_ROLE_ERROR_NO_PERM_CATEGORY} '{category.name}'")
+                except Exception as e:
+                    logger.error(f"{COPY_ROLE_ERROR_CATEGORY} '{category.name}': {e}")
+                    error_list.append(f"{COPY_ROLE_ERROR_CATEGORY} '{category.name}': {e}")
+        for channel in interaction.guild.channels:
+            if isinstance(channel, discord.CategoryChannel):
+                continue  # Already (probably) handled by category loop
+            if not channel.permissions_synced:  # only non-synced channels
+                overwrites = channel.overwrites_for(role_from)
+                if overwrites != discord.PermissionOverwrite():
+                    try:
+                        await channel.set_permissions(new_role, overwrite=overwrites)
+                    except discord.Forbidden:
+                        logger.warning(f"{COPY_ROLE_ERROR_NO_PERM_CHANNEL} '{category.name}'")
+                        error_list.append(f"{COPY_ROLE_ERROR_NO_PERM_CHANNEL} '{category.name}'")
+                    except Exception as e:
+                        logger.error(f"{COPY_ROLE_ERROR_CHANNEL} '{category.name}': {e}")
+                        error_list.append(f"{COPY_ROLE_ERROR_CHANNEL} '{category.name}': {e}")
+        errors_string = COPY_ROLE_NO_ERRORS if not error_list else f"{COPY_ROLE_WITH_ERRORS}{'\n'.join(error_list)}"
+        await interaction.response.send_message(COPY_ROLE_SUCCESS.format(role_from=role_from.mention, new_role=new_role.mention, errors=errors_string), ephemeral=True)
+    except discord.errors.Forbidden:
+        await interaction.response.send_message(f"{COPY_ROLE_ERROR_NO_PERM_ROLE_MANAGE}.", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {role_from.name}, {role_to};")
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {role_from.name}, {role_to}; traceback: {traceback.format_exc()}")
+    return
+
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
