@@ -1037,9 +1037,13 @@ async def grafana_add_match(interaction: discord.Interaction, name:str, map:str,
 @commands.guild_only()
 async def grafana_add_stats(interaction: discord.Interaction, match_id:int, data: discord.Attachment):
     # await interaction.response.defer(thinking=True)  # Tells Discord you're processing
+    await interaction.response.send_message(f"{discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=False)
+    initial_message = await interaction.original_response()
     logger.info(f"Received grafana_add_stats: {match_id}, from user: {interaction.user.name} <@{interaction.user.id}>")
     if not data.filename.lower().endswith(".csv"):
-        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_NOT_CSV}", ephemeral=True)
+        await initial_message.delete()
+        await interaction.followup.send(f"{GRAFANA_ADD_STATS_ERROR_NOT_CSV}", ephemeral=False)
+        # await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_NOT_CSV}", ephemeral=True)
         logger.error(f"Got a file not in csv format: {data.filename}")
         return
     try:
@@ -1053,35 +1057,49 @@ async def grafana_add_stats(interaction: discord.Interaction, match_id:int, data
         reader = csv.reader(io.StringIO(decoded), dialect)
         csv_data = list(reader)
     except Exception as e:
-        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_PARSING_CSV}", ephemeral=True)
+        await initial_message.delete()
+        await interaction.followup.send(f"{GRAFANA_ADD_STATS_ERROR_PARSING_CSV}", ephemeral=False)
+        # await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_PARSING_CSV}", ephemeral=True)
         logger.error(f"Failed to parse csv: {e}; traceback: {traceback.format_exc()}")
         return
     if not csv_data:
-        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_EMPTY_CSV}", ephemeral=True)
+        await initial_message.delete()
+        await interaction.followup.send(f"{GRAFANA_ADD_STATS_ERROR_EMPTY_CSV}", ephemeral=False)
+        # await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_EMPTY_CSV}", ephemeral=True)
         logger.warning(f"Empty csv file.")
         return
     query_list = []
     try:
         for line in csv_data:
             if re.search(r"([`'\";]|--{2,})", line[0]):
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {line[0]}", ephemeral=True)
+                await initial_message.delete()
+                await interaction.followup.send(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {line[0]}", ephemeral=False)
+                # await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {line[0]}", ephemeral=True)
                 logger.warning(f"Catched SQL inject attempt: {line[0]}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
                 return
             query_list.append(
                 f"call sp_addKDWR({match_id}, fn_getsteamidfromname('{line[0]}'), {line[1]}, {line[2]}, {line[3]}, {line[4]}, {line[5]})"
             )
     except Exception as e:
-        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_FAILED_TO_PARSE_CSV}", ephemeral=True)
+        try:
+            await initial_message.delete()
+            await interaction.followup.send(f"{GRAFANA_ADD_STATS_FAILED_TO_PARSE_CSV}", ephemeral=False)
+        except Exception as ee:
+            await interaction.response.send_message(f"{GRAFANA_ADD_STATS_FAILED_TO_PARSE_CSV}", ephemeral=True)
         logger.error(f"Failed to parse csv: {e}; traceback: {traceback.format_exc()}")
         return
     if not query_list:
-        await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_GETTING_QUERIES}", ephemeral=True)
+        await initial_message.delete()
+        await interaction.followup.send(f"{GRAFANA_ADD_STATS_ERROR_GETTING_QUERIES}", ephemeral=False)
+        # await interaction.response.send_message(f"{GRAFANA_ADD_STATS_ERROR_GETTING_QUERIES}", ephemeral=True)
         logger.warning(f"Empty query list from csv file.")
         return
     try:
         conn = get_db_connection()
     except Exception as e:
-        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        await initial_message.delete()
+        await interaction.followup.send(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=False)
+        # await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
         logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
         return
     try:
@@ -1090,20 +1108,27 @@ async def grafana_add_stats(interaction: discord.Interaction, match_id:int, data
                 for query in query_list:
                     cursor.execute(query)
                     conn.commit()
-                await interaction.response.send_message(
-                f"### {GRAFANA_ADD_STATS_SUCCESS}:\n -{GRAFANA_ADD_STATS_MATCH_ID_STR}: `{match_id}` \n -{GRAFANA_ADD_STATS_QUERIES_STR}:\n```{'\n'.join(query_list)}```",
-                ephemeral=False
-                )
+                await initial_message.delete()
+                await interaction.followup.send(f"### {GRAFANA_ADD_STATS_SUCCESS}:\n -{GRAFANA_ADD_STATS_MATCH_ID_STR}: `{match_id}` \n -{GRAFANA_ADD_STATS_QUERIES_STR}:\n```{'\n'.join(query_list)}```", ephemeral=False)
+                # await interaction.response.send_message(
+                # f"### {GRAFANA_ADD_STATS_SUCCESS}:\n -{GRAFANA_ADD_STATS_MATCH_ID_STR}: `{match_id}` \n -{GRAFANA_ADD_STATS_QUERIES_STR}:\n```{'\n'.join(query_list)}```",
+                # ephemeral=False
+                # )
             except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                await initial_message.delete()
+                await interaction.followup.send(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=False)
+                # await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                 logger.error(f"Select and update query failed for args: {[match_id, query_list]}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        try:
+            await initial_message.delete()
+            await interaction.followup.send(f"{ERROR_GENERIC}: {e}", ephemeral=False)
+        except Exception as ee:
+            await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {match_id}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
-
 
 @bot.tree.command(name="count_attendance", description=f"{COUNT_ATTENDANCE_DESCRIPTION}.")
 @discord.app_commands.describe(
