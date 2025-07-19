@@ -160,3 +160,9 @@ COPY_ROLE_ERROR_CHANNEL = f"{ERROR_GENERIC}: Failed to set permissions in channe
 COPY_ROLE_WITH_ERRORS = "with errors:\n"
 COPY_ROLE_NO_ERRORS = "without errors"
 COPY_ROLE_SUCCESS = "Duplicated role {role_from} to {new_role} {errors}"
+
+COPY_CATEGORY_DESCRIPTION = "Copies a category with all permissions. Manage Channels and Manage Permissions is required, Administrator advised"
+COPY_CATEGORY_ROLE_FROM = "Category copy from"
+COPY_CATEGORY_ROLE_TO = "Category copy to"
+COPY_CATEGORY_SUCCESS = "Duplicated category {category_from} to {category_to}"
+COPY_CATEGORY_ERROR_NO_PERM = f"{ERROR_NO_PERMISSION} create categories or edit permissions"

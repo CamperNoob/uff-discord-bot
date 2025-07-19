@@ -1219,7 +1219,7 @@ async def count_attendance(interaction: discord.Interaction, category: discord.C
     role_from=f"{COPY_ROLE_ROLE_FROM}.",
     role_to=f"{COPY_ROLE_ROLE_TO}."
 )
-@commands.has_any_role(*unpack_matching_conf())
+@commands.has_any_role(*unpack_conf())
 @commands.guild_only()
 async def copy_role(interaction: discord.Interaction, role_from: discord.Role, role_to: str = None):
     logger.info(f"Received copy_role: {role_from.name}, {role_to}, from user: {interaction.user.name} <@{interaction.user.id}>")
@@ -1263,5 +1263,59 @@ async def copy_role(interaction: discord.Interaction, role_from: discord.Role, r
         await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {role_from.name}, {role_to}; traceback: {traceback.format_exc()}")
     return
+
+@bot.tree.command(name="copy_category", description=f"{COPY_CATEGORY_DESCRIPTION}.")
+@discord.app_commands.describe(
+    category_from=f"{COPY_CATEGORY_ROLE_FROM}.",
+    category_to=f"{COPY_CATEGORY_ROLE_TO}."
+)
+@commands.has_any_role(*unpack_conf())
+@commands.guild_only()
+async def copy_category(interaction: discord.Interaction, category_from: discord.CategoryChannel, category_to: str = None):
+    logger.info(f"Received copy_category: {category_from.name}, {category_to}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    if not category_to:
+            category_to = f"{category_from.name}_copy"
+    try:
+        overwrites = {}
+        for target, perms in category_from.overwrites.items():
+            overwrites[target] = perms
+        new_category = await interaction.guild.create_category(name=category_to, overwrites=overwrites)
+        await interaction.response.send_message(COPY_CATEGORY_SUCCESS.format(category_from=category_from.name, category_to=new_category.name), ephemeral=True)
+    except discord.errors.Forbidden:
+        await interaction.response.send_message(f"{COPY_CATEGORY_ERROR_NO_PERM}.", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to};")
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to}; traceback: {traceback.format_exc()}")
+    return
+
+# @bot.tree.command(name="copy_perms", description=f"{COPY_CATEGORY_DESCRIPTION}.")
+# @discord.app_commands.describe(
+#     role_from=f"{COPY_CATEGORY_ROLE_FROM}.",
+#     role_to=f"{COPY_CATEGORY_ROLE_TO}.",
+#     category_from=f"{COPY_CATEGORY_ROLE_FROM}.",
+#     category_to=f"{COPY_CATEGORY_ROLE_FROM}.",
+#     channel_from=f"{COPY_CATEGORY_ROLE_FROM}.",
+#     channel_to=f"{COPY_CATEGORY_ROLE_FROM}."
+# )
+# @commands.has_any_role(*unpack_conf())
+# @commands.guild_only()
+# async def copy_perms(interaction: discord.Interaction, category_from: discord.CategoryChannel, category_to: str = None):
+#     logger.info(f"Received copy_category: {category_from.name}, {category_to}, from user: {interaction.user.name} <@{interaction.user.id}>")
+#     if not category_to:
+#             category_to = f"{category_from.name}_copy"
+#     try:
+#         overwrites = {}
+#         for target, perms in category_from.overwrites.items():
+#             overwrites[target] = perms
+#         new_category = await interaction.guild.create_category(name=category_to, overwrites=overwrites)
+#         await interaction.response.send_message(COPY_CATEGORY_SUCCESS.format(category_from=category_from.name, category_to=new_category.name), ephemeral=True)
+#     except discord.errors.Forbidden:
+#         await interaction.response.send_message(f"{COPY_CATEGORY_ERROR_NO_PERM}.", ephemeral=True)
+#         logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to};")
+#     except Exception as e:
+#         await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+#         logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to}; traceback: {traceback.format_exc()}")
+#     return
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)
