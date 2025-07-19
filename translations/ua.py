@@ -161,7 +161,7 @@ COPY_ROLE_WITH_ERRORS = "з помилками:\n"
 COPY_ROLE_NO_ERRORS = "без помилок"
 COPY_ROLE_SUCCESS = "Скопійовано роль {role_from} в {new_role} {errors}"
 
-COPY_CATEGORY_DESCRIPTION = "Копіює категорію з усіма дозволами. Керування Каналами та Керування Правами обов'язкове, Адміністратор - дуже радиться"
+COPY_CATEGORY_DESCRIPTION = "Копіює категорію з дозволами. Керування Каналами та Правами обов'язкове, Адміністратор - радиться"
 COPY_CATEGORY_ROLE_FROM = "Категорію, яку копіювати"
 COPY_CATEGORY_ROLE_TO = "Назва скопійованої категорії"
 COPY_CATEGORY_SUCCESS = "Скопійовано роль {category_from} в {category_to}"
