@@ -855,6 +855,7 @@ async def autopost_enable(interaction: discord.Interaction, status:int):
         discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_SCRIMS}", value="scrims"),
         discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_TRAINING}", value="training"),
         discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_TEST}", value="test"),
+        discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_ARMA}", value="arma"),
         discord.app_commands.Choice(name=f"{SERVER_INFO_SERVER_CUSTOM}", value="")
     ],
     ping=[

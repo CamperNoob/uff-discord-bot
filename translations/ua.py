@@ -97,6 +97,7 @@ SERVER_INFO_PING = "Додавати пінги зі списку ✅ івент
 SERVER_INFO_SERVER_SCRIMS = "Scrims"
 SERVER_INFO_SERVER_TRAINING = "Training"
 SERVER_INFO_SERVER_TEST = "Test"
+SERVER_INFO_SERVER_ARMA = "Arma Training"
 SERVER_INFO_SERVER_CUSTOM = "Інше"
 SERVER_INFO_NAME = f"Ім'я серверу (для варіанту '{SERVER_INFO_SERVER_CUSTOM}')"
 SERVER_INFO_PASSWORD = f"Пароль серверу (для варіанту '{SERVER_INFO_SERVER_CUSTOM}')"
