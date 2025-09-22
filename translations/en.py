@@ -4,6 +4,7 @@ SYNCED = "Commands synced"
 ERROR_WRONG_URL = f"{ERROR_GENERIC}: provided url doesn't look correct"
 ERROR_MESSAGE_NOT_FOUND = f"{ERROR_GENERIC}: message from provided url was not found"
 ERROR_NO_PERMISSION = f"{ERROR_GENERIC}: I have no permissions to"
+ERROR_USER_NO_PERMISSION = f"{ERROR_GENERIC}: you have no permissions to"
 ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED = f"{ERROR_GENERIC}: Cannot find message. Provide message URL or use in a channel with"
 ERROR_NOT_READY = f'{ERROR_GENERIC}: Command is in development and not ready for usage'
 
@@ -167,3 +168,13 @@ COPY_CATEGORY_ROLE_FROM = "Category copy from"
 COPY_CATEGORY_ROLE_TO = "Category copy to"
 COPY_CATEGORY_SUCCESS = "Duplicated category {category_from} to {category_to}"
 COPY_CATEGORY_ERROR_NO_PERM = f"{ERROR_NO_PERMISSION} create categories or edit permissions"
+
+GIF_ARCHIVE_DESCRIPTION = "FRS gif archive. Replies with link to gif."
+GIF_ARCHIVE_GIF_DESCRIPTION = "gif from archive."
+GIF_ARCHIVE_BOT_NO_PERMISSIONS = f"{ERROR_NO_PERMISSION} write in this channel"
+GIF_ARCHIVE_USER_NO_PERMISSIONS = f"{ERROR_USER_NO_PERMISSION} use this command"
+
+ECHO_DESCRIPTION = "Send message as a bot."
+ECHO_WHAT = "Message"
+ECHO_WHERE = "Channel to send to"
+ECHO_DONE = "Done"

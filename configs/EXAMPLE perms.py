@@ -1,3 +1,5 @@
+from discord.ext import commands
+
 roles = {
     "guild1": {
         "clanrep":0000000000000000001,
@@ -37,3 +39,12 @@ def unpack_matching_conf():
         ("guild2", "clanrep"),
     ]
     return unpack_matching(*curr_list)
+
+
+# strict "has_any_role"
+def strict_has_any_role(*role_ids):
+    async def predicate(ctx):
+        if any(role.id in role_ids for role in ctx.author.roles):
+            return True
+        raise commands.MissingAnyRole(role_ids)
+    return commands.check(predicate)

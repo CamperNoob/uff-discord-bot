@@ -4,6 +4,7 @@ SYNCED = "Команди синхронізовані"
 ERROR_WRONG_URL = f"{ERROR_GENERIC}: надане посилання не виглядає правильним"
 ERROR_MESSAGE_NOT_FOUND = f"{ERROR_GENERIC}: повідомлення не знайдено за посиланням"
 ERROR_NO_PERMISSION = f"{ERROR_GENERIC}: я не маю доступу до"
+ERROR_USER_NO_PERMISSION = f"{ERROR_GENERIC}: ти не маєш доступу до"
 ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED = f"{ERROR_GENERIC}: повідомлення не знайдено. Вкажіть посилання на повідомлення або використовуйте в каналі з"
 ERROR_NOT_READY = f'{ERROR_GENERIC}: Команда в розробці та не готова до використання'
 
@@ -167,3 +168,13 @@ COPY_CATEGORY_ROLE_FROM = "Категорію, яку копіювати"
 COPY_CATEGORY_ROLE_TO = "Назва скопійованої категорії"
 COPY_CATEGORY_SUCCESS = "Скопійовано категорію {category_from} в {category_to}"
 COPY_CATEGORY_ERROR_NO_PERM = f"{ERROR_NO_PERMISSION} створення категорій, або редагування дозволів"
+
+GIF_ARCHIVE_DESCRIPTION = "Архів гіфок FRS. Відповідає посиланням на гіфку."
+GIF_ARCHIVE_GIF_DESCRIPTION = "Гіфка із архіву."
+GIF_ARCHIVE_BOT_NO_PERMISSIONS = f"{ERROR_NO_PERMISSION} написання в цьому каналі"
+GIF_ARCHIVE_USER_NO_PERMISSIONS = f"{ERROR_USER_NO_PERMISSION} використання цієї команди"
+
+ECHO_DESCRIPTION = "Відправити повідомлення від особи бота."
+ECHO_WHAT = "Повідомлення"
+ECHO_WHERE = "Канал, куди відправити"
+ECHO_DONE = "Відправлено"

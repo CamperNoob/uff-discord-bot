@@ -174,4 +174,5 @@ tokens.py
 bot.log
 perms.py
 seeding_messages_config.py
+gifs_command.py
 logs/
