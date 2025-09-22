@@ -1315,6 +1315,26 @@ async def copy_category(interaction: discord.Interaction, category_from: discord
         logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to}; traceback: {traceback.format_exc()}")
     return
 
+@bot.tree.command(name="echo", description=f"echo.")
+@discord.app_commands.describe(
+    what=f"What.",
+    where=f"Where."
+)
+@commands.has_any_role(1376229969813966888)
+@commands.guild_only()
+async def echo(interaction: discord.Interaction, what: str, where: discord.TextChannel):
+    logger.info(f"Received echo: {str}, {where.name}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    try:
+        await where.send(what)
+        await interaction.response.send_message(f"Done.", ephemeral=True)
+    except discord.errors.Forbidden:
+        await interaction.response.send_message(f"No perm.", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {what}, {where.name};")
+    except Exception as e:
+        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {what}, {where.name}; traceback: {traceback.format_exc()}")
+    return
+
 # @bot.tree.command(name="copy_perms", description=f"{COPY_CATEGORY_DESCRIPTION}.")
 # @discord.app_commands.describe(
 #     role_from=f"{COPY_CATEGORY_ROLE_FROM}.",
