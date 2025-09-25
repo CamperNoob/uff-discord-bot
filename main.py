@@ -1325,6 +1325,14 @@ async def copy_category(interaction: discord.Interaction, category_from: discord
 @commands.guild_only()
 async def echo(interaction: discord.Interaction, what: str, where: discord.TextChannel):
     logger.info(f"Received echo: {what}, {where.name}, from user: {interaction.user.name} <@{interaction.user.id}>")
+    if interaction.user.id == 665907321519472672:
+        await interaction.response.send_message(f"Ладос йди нахій.", ephemeral=False)
+        logger.error(f"{ERROR_GENERIC}: LADDOS PIDOR; args: {what}, {where.name};")
+        return
+    if interaction.user.id != 281480977707040769:
+        await interaction.response.send_message(f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: NO PERMS USER; args: {what}, {where.name};")
+        return
     try:
         await where.send(what)
         await interaction.response.send_message(f"{ECHO_DONE}.", ephemeral=True)
