@@ -1,6 +1,6 @@
 from google import genai
 from google.genai import types
-from configs.tokens import GeminiAPI, GeminiAPIInstruction
+from configs.tokens import GeminiAPI, GeminiAPIInstruction, GeminiModel
 import logging
 import traceback
 
@@ -29,7 +29,7 @@ async def generate_response(
     *,
     image_urls: list[str] | None = None,
     image_bytes: list[bytes] | None = None,
-    model: str = "gemini-2.5-flash-lite",
+    model: str = GeminiModel,
     max_output_tokens: int = 256,
     temperature: float = 0.6,
     top_p: float = 0.9,

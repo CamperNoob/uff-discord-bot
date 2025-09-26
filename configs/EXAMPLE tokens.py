@@ -27,6 +27,8 @@ Servers = {
     }
 }
 ApolloID = 1234567890
+GeminiAPI = ''
+GeminiModel = 'gemini-2.5-flash-lite'
 GeminiAPIInstruction = [
     types.Part(text="You are a cat named Neko."),
 ]

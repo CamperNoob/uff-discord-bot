@@ -266,7 +266,7 @@ async def on_message(message: discord.Message):
         await bot.process_commands(message)
         return
 
-    user_info = f"Username: {message.author} | User ID: {message.author.id}"
+    user_info = f"Username: {message.author.name} | Nickname: {message.author.display_name} | User ID: {message.author.id}"
     user_input = message.content.replace(f"<@{bot.user.id}>", "FRS Bot").strip()
 
     # Determine if bot should respond
@@ -289,9 +289,9 @@ async def on_message(message: discord.Message):
     context_text = ""
     if replied_msg:
         if replied_msg.author == bot.user:
-            context_text = f"Previous message by FRS Bot: {replied_msg.content}\n"
+            context_text = f"In reply to your: {replied_msg.content}\n"
         else:
-            context_text = f"Previous message by {replied_msg.author.name} | User ID: {replied_msg.author.id}: {replied_msg.content}\n"
+            context_text = f"In reply to message by: Username: {replied_msg.author.name} | Nickname: {replied_msg.author.display_name} | User ID: {replied_msg.author.id}: {replied_msg.content}\n"
 
     # Detect image URLs in message content and attachments
     # image_urls = [
