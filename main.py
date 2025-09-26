@@ -321,11 +321,16 @@ async def on_message(message: discord.Message):
     # Stream response from Gemini
     try:
         response = await generate_response(gemini, prompt) #, image_urls=image_urls, image_bytes=image_bytes_list)
-        await thinking_msg.edit(content=response)
+        await thinking_msg.edit(content=response.text)
     except Exception as e:
+        if response:
+            text_length = len(response.text) if response.text else 0
+            attrs = {k: getattr(response, k) for k in dir(response) if not k.startswith("_") and not callable(getattr(response, k))}
+            logger.info(f"GenAI response received | text_length={text_length} | attributes={attrs}")
         logger.error(f"Error during response from Gemini: {e}, response = {response}\n{traceback.format_exc()}")
         try:
-            await thinking_msg.delete()
+            # await thinking_msg.delete()
+            await thinking_msg.edit(content="❌Помилка генерації відповіді. Спробуйте пізніше.")
         except discord.HTTPException as delete_error:
             logger.warning(f"Failed to delete thinking message: {delete_error}")
 

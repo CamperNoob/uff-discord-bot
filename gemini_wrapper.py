@@ -29,7 +29,7 @@ async def generate_response(
     *,
     image_urls: list[str] | None = None,
     image_bytes: list[bytes] | None = None,
-    model: str = "gemini-2.5-flash",
+    model: str = "gemini-2.5-flash-lite",
     max_output_tokens: int = 256,
     temperature: float = 0.6,
     top_p: float = 0.9,
@@ -67,7 +67,7 @@ async def generate_response(
                 system_instruction=GeminiAPIInstruction,
             ),
         )
-        return response.text
+        return response
     except Exception as e:
         raise RuntimeError(f"Failed to generate response: {e}") from e
 
