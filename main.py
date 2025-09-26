@@ -288,10 +288,11 @@ async def on_message(message: discord.Message):
     # Include context if replying to a message
     context_text = ""
     if replied_msg:
-        if replied_msg.author == bot.user:
-            context_text = f"In reply to your: {replied_msg.content}\n"
-        else:
-            context_text = f"In reply to message by: Username: {replied_msg.author.name} | Nickname: {replied_msg.author.display_name} | User ID: {replied_msg.author.id}: {replied_msg.content}\n"
+        #if replied_msg.author == bot.user:
+        #    context_text = f"In reply to FRS bot: {replied_msg.content}\n"
+        #else:
+        #    context_text = f"In reply to message by {replied_msg.author.name} ({replied_msg.author.display_name}) ({replied_msg.author.id}): {replied_msg.content}\n"
+        context_text = f"[Replying to {replied_msg.author.display_name}: {replied_msg.content}]\n"
 
     # Detect image URLs in message content and attachments
     # image_urls = [
@@ -308,7 +309,7 @@ async def on_message(message: discord.Message):
     #             logger.warning(f"Failed to read attachment {attachment.filename}: {e}")
 
     # Build prompt for AI
-    prompt = f"{context_text}{user_info} says: {user_input}"
+    prompt = f"[CONTEXT INFO]\n{context_text}\n[USER INFO] {user_info}]\n[USER MESSAGE] {user_input}"
 
     # Send initial "thinking" message
     try:
@@ -321,7 +322,8 @@ async def on_message(message: discord.Message):
     # Stream response from Gemini
     try:
         response = await generate_response(gemini, prompt) #, image_urls=image_urls, image_bytes=image_bytes_list)
-        await thinking_msg.edit(content=response.text)
+        response_text = response.text.removeprefix('FRS Bot: ')
+        await thinking_msg.edit(content=response_text)
     except Exception as e:
         if response:
             extra_info = {}
