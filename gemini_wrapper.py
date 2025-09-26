@@ -30,7 +30,7 @@ async def generate_response(
     image_urls: list[str] | None = None,
     image_bytes: list[bytes] | None = None,
     model: str = GeminiModel,
-    max_output_tokens: int = 256,
+    max_output_tokens: int = 512,
     temperature: float = 0.6,
     top_p: float = 0.9,
 ) -> str:
