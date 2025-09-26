@@ -1,3 +1,5 @@
+from google.genai import types
+
 DiscordToken = '' #Discord developers -> App -> Bot -> TOKEN
 MySQL = {
     "host": "", #ip
@@ -25,3 +27,6 @@ Servers = {
     }
 }
 ApolloID = 1234567890
+GeminiAPIInstruction = [
+    types.Part(text="You are a cat named Neko."),
+]

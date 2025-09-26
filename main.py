@@ -21,6 +21,7 @@ from configs.gifs_command import get_gifs
 from translations.ua import *
 import csv
 import io
+from gemini_wrapper import get_client, generate_response, generate_response_stream
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
@@ -50,6 +51,8 @@ autopost_enabled = autopost_conf.get("enabled", False)
 message_pool = []
 
 bot = commands.Bot(command_prefix="/", intents=intents)
+
+gemini = None
 
 def seconds_until(target_time):
     now = datetime.now()
@@ -172,6 +175,7 @@ async def fetch_message_from_url(ctx: discord.Interaction, message_link):
 
 @bot.event
 async def on_ready():
+    global gemini
     logger.info(f'Logged in as {bot.user}')
     try:
         synced = await bot.tree.sync()
@@ -185,6 +189,150 @@ async def on_ready():
                 daily_autopost.start()
     except Exception as e:
         logger.error(f"[daily_autopost():on_ready()] {ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
+    try:
+        gemini = await get_client()
+        logger.info(f"Initialized gemini client successfully")
+    except Exception as e:
+        logger.error(f"Failed to get a client for gemini: {e}; traceback: {traceback.format_exc()}")
+
+# @bot.event
+# async def on_message(message: discord.Message):
+#     global gemini
+
+#     # Ignore messages from the bot itself
+#     if message.author == bot.user or not gemini:
+#         await bot.process_commands(message)
+#         return
+
+#     user_info = f"Username: {message.author} | User ID: {message.author.id}"
+#     user_input = message.content.replace(f"<@{bot.user.id}>", "FRS Bot").strip()
+
+#     # Determine if bot should respond
+#     should_respond = bot.user in message.mentions
+#     replied_msg = None
+
+#     if message.reference:
+#         try:
+#             replied_msg = await message.channel.fetch_message(message.reference.message_id)
+#             if replied_msg.author == bot.user:
+#                 should_respond = True
+#         except Exception as e:
+#             logger.warning(f"Could not fetch replied message: {e}")
+
+#     if not should_respond:
+#         await bot.process_commands(message)
+#         return
+
+#     # Include context if replying to a message
+#     context_text = ""
+#     if replied_msg:
+#         if replied_msg.author == bot.user:
+#             context_text = f"Previous message by FRS Bot: {replied_msg.content}\n"
+#         else:
+#             context_text = f"Previous message by {replied_msg.author.name} | User ID: {replied_msg.author.id}: {replied_msg.content}\n"
+    
+#     # Detect image URLs in message content and attachments
+#     image_urls = [
+#         url for url in re.findall(r"(https?://\S+\.(?:png|jpg|jpeg|gif|webp))", message.content, re.IGNORECASE)
+#     ]
+#     for attachment in message.attachments:
+#         if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+#             image_urls.append(attachment.url)
+
+#     # Build prompt for AI
+#     prompt = f"{context_text}{user_info} says: {user_input}"
+
+#     response = None
+#     try:
+#         response = await generate_response(gemini, prompt, image_urls=image_urls)
+#     except Exception as e:
+#         logger.error(f"Error getting response from Gemini: {e}\n{traceback.format_exc()}")
+
+#     if response:
+#         try:
+#             await message.reply(response, mention_author=True)
+#         except Exception as e:
+#             logger.error(f"Error sending response from Gemini: {response}, {e}\n{traceback.format_exc()}")
+
+#     # Ensure commands still get processed
+#     await bot.process_commands(message)
+
+@bot.event
+async def on_message(message: discord.Message):
+    global gemini
+
+    # Ignore messages from the bot itself
+    if message.author == bot.user or not gemini:
+        await bot.process_commands(message)
+        return
+
+    user_info = f"Username: {message.author} | User ID: {message.author.id}"
+    user_input = message.content.replace(f"<@{bot.user.id}>", "FRS Bot").strip()
+
+    # Determine if bot should respond
+    should_respond = bot.user in message.mentions
+    replied_msg = None
+
+    if message.reference:
+        try:
+            replied_msg = await message.channel.fetch_message(message.reference.message_id)
+            if replied_msg.author == bot.user:
+                should_respond = True
+        except Exception as e:
+            logger.warning(f"Could not fetch replied message: {e}")
+
+    if not should_respond:
+        await bot.process_commands(message)
+        return
+
+    # Include context if replying to a message
+    context_text = ""
+    if replied_msg:
+        if replied_msg.author == bot.user:
+            context_text = f"Previous message by FRS Bot: {replied_msg.content}\n"
+        else:
+            context_text = f"Previous message by {replied_msg.author.name} | User ID: {replied_msg.author.id}: {replied_msg.content}\n"
+
+    # Detect image URLs in message content and attachments
+    # image_urls = [
+    #     url for url in re.findall(r"(https?://\S+\.(?:png|jpg|jpeg|gif|webp))", message.content, re.IGNORECASE)
+    # ]
+    # image_bytes_list = []
+    # for attachment in message.attachments:
+    #     if attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp")):
+    #         #image_urls.append(attachment.url)
+    #         try:
+    #             image_bytes = await attachment.read()  # <-- gets bytes
+    #             image_bytes_list.append(image_bytes)
+    #         except Exception as e:
+    #             logger.warning(f"Failed to read attachment {attachment.filename}: {e}")
+
+    # Build prompt for AI
+    prompt = f"{context_text}{user_info} says: {user_input}"
+
+    # Send initial "thinking" message
+    try:
+        thinking_msg = await message.reply(f"FRS Bot думає{discord.utils.get(bot.emojis, name='loading') or '...'}", mention_author=False)
+    except Exception as e:
+        logger.error(f"Failed to send thinking message: {e}")
+        await bot.process_commands(message)
+        return
+
+    # Stream response from Gemini
+    try:
+        response = await generate_response(gemini, prompt) #, image_urls=image_urls, image_bytes=image_bytes_list)
+        await thinking_msg.edit(content=response)
+    except Exception as e:
+        logger.error(f"Error during response from Gemini: {e}, response = {response}\n{traceback.format_exc()}")
+        try:
+            await thinking_msg.delete()
+        except discord.HTTPException as delete_error:
+            logger.warning(f"Failed to delete thinking message: {delete_error}")
+
+
+    # Ensure commands still get processed
+    await bot.process_commands(message)
+
 
 @tasks.loop(hours=24)
 async def daily_autopost():
