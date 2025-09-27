@@ -20,8 +20,8 @@ async def get_client(
     try:
         client = genai.Client(**client_kwargs)
         return client.aio
-    except Exception as e:
-        raise RuntimeError(f"Failed to initialize GenAI client: {e}") from e
+    except Exception:
+        raise
 
 async def generate_response(
     client: genai.Client.aio,
@@ -68,8 +68,8 @@ async def generate_response(
             ),
         )
         return response
-    except Exception as e:
-        raise RuntimeError(f"Failed to generate response: {e}") from e
+    except Exception:
+        raise
 
 async def generate_response_stream(
     client: genai.Client.aio,

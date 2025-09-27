@@ -21,7 +21,8 @@ from configs.gifs_command import get_gifs
 from translations.ua import *
 import csv
 import io
-from gemini_wrapper import get_client, generate_response, generate_response_stream
+from gemini_wrapper import get_client, generate_response
+from google.genai.errors import ClientError
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
@@ -324,20 +325,37 @@ async def on_message(message: discord.Message):
         response = await generate_response(gemini, prompt) #, image_urls=image_urls, image_bytes=image_bytes_list)
         response_text = response.text.removeprefix('FRS Bot: ')
         await thinking_msg.edit(content=response_text)
+    except ClientError as e:
+        logger.error(f"Error generating response. Quota exceeded.")
+        if "429" in str(e):
+            try:
+                await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте після 10:00 по Києву.")
+            except Exception as e:
+                try:
+                    await thinking_msg.delete()
+                except Exception as e:
+                    logger.exception(f"Error deleting the message. {e}")
+        else:
+            raise e
     except Exception as e:
-        if response:
-            extra_info = {}
-            if hasattr(response, "prompt_feedback"):
-                extra_info["prompt_feedback"] = response.prompt_feedback
-            if hasattr(response, "finish_reason"):
-                extra_info["finish_reason"] = response.finish_reason
         logger.error(f"Error during response from Gemini: {e}\n{traceback.format_exc()}")
         try:
             # await thinking_msg.delete()
+            if response:
+                extra_info = {}
+                if hasattr(response, "prompt_feedback"):
+                    extra_info["prompt_feedback"] = response.prompt_feedback
+                if hasattr(response, "finish_reason"):
+                    extra_info["finish_reason"] = response.finish_reason
             await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Спробуйте пізніше. \n```({extra_info})```")
-        except discord.HTTPException as delete_error:
-            logger.warning(f"Failed to delete thinking message: {delete_error}")
-
+        except Exception as e:
+            try:
+                await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Спробуйте пізніше.")
+            except Exception as e:
+                try:
+                    await thinking_msg.delete()
+                except Exception as e:
+                    logger.exception(f"Error deleting the message. {e}")
 
     # Ensure commands still get processed
     await bot.process_commands(message)
