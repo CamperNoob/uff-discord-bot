@@ -23,6 +23,8 @@ import csv
 import io
 from gemini_wrapper import get_client, generate_response
 from google.genai.errors import ClientError
+from datetime import datetime, timedelta
+import pytz
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 
@@ -329,7 +331,17 @@ async def on_message(message: discord.Message):
         logger.error(f"Error generating response. Quota exceeded.")
         if "429" in str(e):
             try:
-                await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте після 10:00 по Києву.")
+                try:
+                    pst = pytz.timezone("US/Pacific")
+                    now_pst = datetime.now(pst)
+                    midnight_today = now_pst.replace(hour=0, minute=0, second=0, microsecond=0)
+                    next_midnight = midnight_today + timedelta(days=1)
+                    unix_ts = int(next_midnight.timestamp())
+                    timestamp_try_again = f"<t:{unix_ts}:R>"
+                    await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте {timestamp_try_again}.")
+                except Exception as e:
+                    logger.error(f"Failed to generate unix timestamp: {e}")
+                    await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте після 10:00 по Києву.")
             except Exception as e:
                 try:
                     await thinking_msg.delete()
