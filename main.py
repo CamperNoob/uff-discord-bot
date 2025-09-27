@@ -9,6 +9,7 @@ import traceback
 import pymysql
 import re
 import requests
+import ast
 from discord.ext import commands, tasks
 from logging.handlers import TimedRotatingFileHandler
 from collections import defaultdict
@@ -56,6 +57,8 @@ message_pool = []
 bot = commands.Bot(command_prefix="/", intents=intents)
 
 gemini = None
+
+daily_quota_timestamp = None
 
 def seconds_until(target_time):
     now = datetime.now()
@@ -263,6 +266,7 @@ async def on_ready():
 @bot.event
 async def on_message(message: discord.Message):
     global gemini
+    global daily_quota_timestamp
 
     # Ignore messages from the bot itself
     if message.author == bot.user or not gemini:
@@ -324,24 +328,62 @@ async def on_message(message: discord.Message):
 
     # Stream response from Gemini
     try:
-        response = await generate_response(gemini, prompt) #, image_urls=image_urls, image_bytes=image_bytes_list)
-        response_text = response.text.removeprefix('FRS Bot: ')
-        await thinking_msg.edit(content=response_text)
+        pst = pytz.timezone("US/Pacific")
+        now_pst = datetime.now(pst)
+        if (not daily_quota_timestamp or daily_quota_timestamp < now_pst):
+            response = await generate_response(gemini, prompt) #, image_urls=image_urls, image_bytes=image_bytes_list)
+            response_text = response.text.removeprefix('FRS Bot: ')
+            await thinking_msg.edit(content=response_text)
+        else:
+            logger.warning(f"Quota exceeded for the current day, skipping sending the request.")
+            await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте <t:{int(daily_quota_timestamp.timestamp())}:R>.")
     except ClientError as e:
         logger.error(f"Error generating response. Quota exceeded.")
         if "429" in str(e):
             try:
-                try:
-                    pst = pytz.timezone("US/Pacific")
-                    now_pst = datetime.now(pst)
+                pst = pytz.timezone("US/Pacific")
+                now_pst = datetime.now(pst)
+                if "retryDelay" in str(e) and "You exceeded your current quota" not in str(e):
+                    match = re.search(r"(\{.*\})", str(e), re.DOTALL)
+                    response_dict = ast.literal_eval(match.group(1))
+                    retry_delay_td = None
+                    for detail in response_dict.get("error", {}).get("details", []):
+                        if detail.get("@type", "").endswith("RetryInfo") and "retryDelay" in detail:
+                            retry_delay_str = detail["retryDelay"]
+                            pattern = r"(\d+)([hms])"
+                            kwargs = {"hours": 0, "minutes": 0, "seconds": 0}
+                            for amount, unit in re.findall(pattern, retry_delay_str):
+                                amount = int(amount)
+                                if unit == "h":
+                                    kwargs["hours"] += amount
+                                elif unit == "m":
+                                    kwargs["minutes"] += amount
+                                elif unit == "s":
+                                    kwargs["seconds"] += amount
+                            retry_delay_td = timedelta(**kwargs)
+                    if retry_delay_td:
+                        retry_time = now_pst + retry_delay_td
+                    else:
+                        logger.warning(f"Failed to parse error dict: {str(response_dict)}")
+                        midnight_today = now_pst.replace(hour=0, minute=0, second=0, microsecond=0)
+                        retry_time = midnight_today + timedelta(days=1)
+                    unix_ts = int(retry_time.timestamp())
+                    timestamp_try_again = f"<t:{unix_ts}:R>"
+                    await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте {timestamp_try_again}.")
+                else:
+                    logger.warning(f"Quota exceeded for the current day.")
                     midnight_today = now_pst.replace(hour=0, minute=0, second=0, microsecond=0)
                     next_midnight = midnight_today + timedelta(days=1)
                     unix_ts = int(next_midnight.timestamp())
+                    daily_quota_timestamp = next_midnight
                     timestamp_try_again = f"<t:{unix_ts}:R>"
                     await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте {timestamp_try_again}.")
+            except (ValueError, SyntaxError, TypeError) as e:
+                logger.exception(f"Error decoding the ast. {e}")
+                try:
+                    await thinking_msg.delete()
                 except Exception as e:
-                    logger.error(f"Failed to generate unix timestamp: {e}")
-                    await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте після 10:00 по Києву.")
+                    logger.exception(f"Error deleting the message. {e}")
             except Exception as e:
                 try:
                     await thinking_msg.delete()
@@ -350,16 +392,23 @@ async def on_message(message: discord.Message):
         else:
             raise e
     except Exception as e:
-        logger.error(f"Error during response from Gemini: {e}\n{traceback.format_exc()}")
+        logger.error(f"Error during response from Gemini: {e}")
         try:
             # await thinking_msg.delete()
             if response:
                 extra_info = {}
                 if hasattr(response, "prompt_feedback"):
                     extra_info["prompt_feedback"] = response.prompt_feedback
+                    if "PROHIBITED_CONTENT" in extra_info["prompt_feedback"]:
+                        await thinking_msg.edit(content=f"❌Помилка генерації відповіді - заборонений контент. Спробуйте ще раз.")
+                    else:
+                        await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Спробуйте пізніше. \n```({extra_info["prompt_feedback"]})```")
                 if hasattr(response, "finish_reason"):
                     extra_info["finish_reason"] = response.finish_reason
-            await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Спробуйте пізніше. \n```({extra_info})```")
+                    if "MAX_TOKENS" in extra_info["finish_reason"]:
+                        await thinking_msg.edit(content=f"❌Помилка генерації відповіді - перевищений ліміт відповіді. Спробуйте ще раз.")
+                    else:
+                        await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Спробуйте пізніше. \n```({extra_info["finish_reason"]})```")
         except Exception as e:
             try:
                 await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Спробуйте пізніше.")
