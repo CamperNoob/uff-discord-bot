@@ -273,8 +273,19 @@ async def on_message(message: discord.Message):
         await bot.process_commands(message)
         return
 
-    user_info = f"Username: {message.author.name} | Nickname: {message.author.display_name} | User ID: {message.author.id}"
+    user_info = f'{{"Username": "{message.author.name}", "Nickname": "{message.author.display_name}", "User ID": "{message.author.id}"}}'
     user_input = message.content.replace(f"<@{bot.user.id}>", "FRS Bot").strip()
+
+    injection_protection_translation = str.maketrans({
+        '{': '(',
+        '}': ')',
+        '[': '(',
+        ']': ')',
+        '"': "'",
+        '\\': '⧵'
+    })
+
+    user_input = user_input.translate(injection_protection_translation)
 
     # Determine if bot should respond
     should_respond = bot.user in message.mentions
@@ -299,7 +310,7 @@ async def on_message(message: discord.Message):
         #    context_text = f"In reply to FRS bot: {replied_msg.content}\n"
         #else:
         #    context_text = f"In reply to message by {replied_msg.author.name} ({replied_msg.author.display_name}) ({replied_msg.author.id}): {replied_msg.content}\n"
-        context_text = f"[Replying to {replied_msg.author.display_name}: {replied_msg.content}]\n"
+        context_text = f'{{"Context author": "{{"Username": "{replied_msg.author.name}", "Nickname": "{replied_msg.author.display_name}", "User ID": "{replied_msg.author.id}"}}", "Context message": "{replied_msg.content}"}}'
 
     # Detect image URLs in message content and attachments
     # image_urls = [
@@ -316,7 +327,21 @@ async def on_message(message: discord.Message):
     #             logger.warning(f"Failed to read attachment {attachment.filename}: {e}")
 
     # Build prompt for AI
-    prompt = f"[CONTEXT INFO]\n{context_text}\n[USER INFO] {user_info}]\n[USER MESSAGE] {user_input}"
+    # prompt = f"[CONTEXT INFO]\n{context_text}\n[USER INFO] {user_info}]\n[USER MESSAGE] {user_input}"
+
+    if user_input == "FRS Bot":
+        if context_text or not context_text == "":
+            user_input = "Reply to the message from the context block." # tries to fix the @FRS_bot message in reply to other user's message
+        else:
+            user_input = "Hi!"
+
+    prompt = f'''
+    {{
+        "Context": {context_text},
+        "User info": {user_info},
+        "User message": "{user_input}"
+    }}
+    '''
 
     # Send initial "thinking" message
     try:
