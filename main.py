@@ -14,7 +14,7 @@ from discord.ext import commands, tasks
 from logging.handlers import TimedRotatingFileHandler
 from collections import defaultdict
 from datetime import datetime, time, timedelta, timezone
-from configs.tokens import DiscordToken, MySQL, Grafana, Servers
+from configs.tokens import DiscordToken, MySQL, Grafana, Servers, TempVoiceChannels
 from configs.tokens import ApolloID as apollo_id
 from configs.seeding_messages_config import autopost_conf
 from configs.perms import unpack_conf, unpack_matching_conf, unpack_matching, strict_has_any_role
@@ -47,6 +47,7 @@ handler = TimedRotatingFileHandler(
 intents = discord.Intents.default()
 intents.messages = True
 intents.message_content = True
+intents.voice_states = True
 intents.guilds = True
 intents.members = True
 
@@ -59,6 +60,9 @@ bot = commands.Bot(command_prefix="/", intents=intents)
 gemini = None
 
 daily_quota_timestamp = None
+
+hub_channel_ids = set(TempVoiceChannels)
+temp_channels = {}
 
 def seconds_until(target_time):
     now = datetime.now()
@@ -200,6 +204,55 @@ async def on_ready():
         logger.info(f"Initialized gemini client successfully")
     except Exception as e:
         logger.error(f"Failed to get a client for gemini: {e}; traceback: {traceback.format_exc()}")
+
+# Temp Voice Channels
+@bot.event
+async def on_voice_state_update(member, before, after):
+    before_id = before.channel.id if before.channel else None
+    after_id = after.channel.id if after.channel else None
+
+    if (
+        (before_id not in hub_channel_ids and before_id not in temp_channels)
+        and (after_id not in hub_channel_ids and after_id not in temp_channels)
+    ):
+        return
+    
+    try:
+    
+        if after.channel and after.channel.id in hub_channel_ids:
+            guild = member.guild
+            hub_channel = after.channel
+
+            temp_channel = await guild.create_voice_channel(
+                name=f"{member.display_name}'s temp voice",
+                category=hub_channel.category,
+                bitrate=hub_channel.bitrate,
+                user_limit=hub_channel.user_limit,
+                overwrites=hub_channel.overwrites
+            )
+
+            overwrite = temp_channel.overwrites_for(member)
+            overwrite.manage_channels = True
+
+            await temp_channel.set_permissions(member, overwrite=overwrite)
+
+            temp_channels[temp_channel.id] = member.id
+
+            await member.move_to(temp_channel)
+        
+        if before.channel and before.channel.id in temp_channels:
+            temp_channel = before.channel
+            if len(temp_channel.members) == 0:
+                await temp_channel.delete(reason="Last user left temporary channel")
+                temp_channels.pop(temp_channel.id, None)
+    
+    except Exception as e:
+        logger.exception(f"Error in on_voice_status_update for member {member.id}: {e}")
+        try:
+            dm_channel = await member.create_dm()
+            await dm_channel.send(f"An error occured while creating temporary channel: {e}")
+        except Exception as dm_error:
+            logger.warning(f"Error sending a dm from on_voice_status_update for member {member.id}: {dm_error}; temp channel error: {e}")
 
 # @bot.event
 # async def on_message(message: discord.Message):

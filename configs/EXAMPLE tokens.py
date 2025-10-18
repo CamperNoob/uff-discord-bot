@@ -32,3 +32,6 @@ GeminiModel = 'gemini-2.5-flash-lite'
 GeminiAPIInstruction = [
     types.Part(text="You are a cat named Neko."),
 ]
+TempVoiceChannels = [   # Voice channels which act as a hub for temporary voices
+    1234567890
+]
