@@ -223,12 +223,18 @@ async def on_voice_state_update(member, before, after):
             guild = member.guild
             hub_channel = after.channel
 
+            if not re.match(r'[A-Za-z\u0400-\u04FF0-9]', hub_channel.name[0], re.UNICODE):
+                prefix = hub_channel.name[0]
+            else:
+                prefix = ''
+
             temp_channel = await guild.create_voice_channel(
-                name=f"{member.display_name}'s temp voice",
+                name=f"{prefix} {member.display_name}'s voice",
                 category=hub_channel.category,
                 bitrate=hub_channel.bitrate,
                 user_limit=hub_channel.user_limit,
-                overwrites=hub_channel.overwrites
+                overwrites=hub_channel.overwrites,
+                position=hub_channel.position + 1
             )
 
             overwrite = temp_channel.overwrites_for(member)
