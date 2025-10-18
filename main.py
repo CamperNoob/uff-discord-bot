@@ -238,7 +238,7 @@ async def on_voice_state_update(member, before, after):
             )
 
             overwrite = temp_channel.overwrites_for(member)
-            overwrite.manage_channels = True
+            overwrite.move_members = True
 
             await temp_channel.set_permissions(member, overwrite=overwrite)
 
