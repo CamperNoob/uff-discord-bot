@@ -233,8 +233,8 @@ async def on_voice_state_update(member, before, after):
                 category=hub_channel.category,
                 bitrate=hub_channel.bitrate,
                 user_limit=hub_channel.user_limit,
-                overwrites=hub_channel.overwrites,
-                position=hub_channel.position + 1
+                overwrites=hub_channel.overwrites #,
+                #position=hub_channel.position + 1
             )
 
             overwrite = temp_channel.overwrites_for(member)
@@ -245,6 +245,9 @@ async def on_voice_state_update(member, before, after):
             temp_channels[temp_channel.id] = member.id
 
             await member.move_to(temp_channel)
+
+            # Explicitly set the position after creation
+            await temp_channel.edit(position=hub_channel.position + 1)
         
         if before.channel and before.channel.id in temp_channels:
             temp_channel = before.channel
