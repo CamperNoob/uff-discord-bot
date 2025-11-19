@@ -64,6 +64,26 @@ daily_quota_timestamp = None
 hub_channel_ids = set(TempVoiceChannels)
 temp_channels = {}
 
+async def send_with_fallback(interaction: discord.Interaction, *args, **kwargs):
+    try:
+        return await interaction.response.send_message(*args, **kwargs)
+    except discord.InteractionResponded:
+        logger.warning(f"Failed to send response, using followup.")
+        return await interaction.followup.send(*args, **kwargs)
+    except Exception as e:
+        logger.error(f"Failed to respond to interaction: {str(e)}")
+
+async def guild_chunk_with_timeout(guild: discord.guild, timeout=2):
+    try:
+        await asyncio.wait_for(guild.chunk(), timeout=timeout)
+    except asyncio.TimeoutError:
+        logger.warning(f"Guild chunk() timed out after {timeout} seconds.")
+        return False
+    except Exception as e:
+        logger.error(f"Guild chunk() failed: {e}")
+        return False
+
+
 def seconds_until(target_time):
     now = datetime.now()
     target = datetime.combine(now.date(), target_time)
@@ -151,15 +171,19 @@ async def fetch_message_from_url(ctx: discord.Interaction, message_link):
             raise ValueError("Message link is missing")
         parts = message_link.split('/')
         if (not parts or len(parts) < 7):
-                await ctx.response.send_message(f"{ERROR_WRONG_URL}: {message_link}", ephemeral=True)
-                return
+            await send_with_fallback(ctx, f"{ERROR_WRONG_URL}: {message_link}", ephemeral=True)
+            return
         #guild_id = int(parts[4])
         channel_id = int(parts[5])
         message_id = int(parts[6])
         guild = ctx.guild
-        channel = guild.get_channel(channel_id)
-        if channel is None:
-            await ctx.response.send_message(f"{ERROR_MESSAGE_NOT_FOUND}: {message_link}", ephemeral=True)
+        try:
+            channel = guild.get_channel(channel_id)
+            if channel is None:
+                channel = await guild.fetch_channel(channel_id)
+        except Exception as e:
+            logger.error(f"Failed to fetch message from {message_link}")
+            await send_with_fallback(ctx, f"{ERROR_MESSAGE_NOT_FOUND}: {message_link}", ephemeral=True)
             return None
         message = await channel.fetch_message(message_id)
         return message
@@ -168,12 +192,14 @@ async def fetch_message_from_url(ctx: discord.Interaction, message_link):
             await ctx.followup.send(f"{ERROR_MESSAGE_NOT_FOUND}: {message_link}", ephemeral=True)
         except Exception as ee:
             logger.error(f"{ERROR_GENERIC}: {ee}; traceback: {traceback.format_exc()}")
+        logger.warning(f"Message not found: {message_link}")
         return None
     except discord.Forbidden:
         try:
             await ctx.followup.send(f"{ERROR_NO_PERMISSION} **{channel.name}**.", ephemeral=True)
         except Exception as ee:
             logger.error(f"{ERROR_GENERIC}: {ee}; traceback: {traceback.format_exc()}")
+        logger.warning(f"No permissions to get the message: {message_link}")
         return None
     except Exception as e:
         try:
@@ -569,25 +595,29 @@ async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message
             async for message in ctx.channel.history(limit=None, oldest_first=True):
                 if message.author.id == apollo_id:
                     message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
+                    logger.info(f"Found message: {message_link}")
                     break
             if not message_link:
-                await ctx.response.send_message(f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_MENTIONS_CANNOT_FIND_APOLLO_MESSAGE}.", ephemeral=True)
+                logger.info(f"Message link not resolved")
+                await send_with_fallback(ctx, f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_MENTIONS_CANNOT_FIND_APOLLO_MESSAGE}.", ephemeral=True)
                 return
         message = await fetch_message_from_url(ctx, message_link)
         if not message:
+            logger.error(f"Message not returned from link: {message_link}")
             return
         if message.author.id != apollo_id:
-            await ctx.response.send_message(f"{ERROR_NOT_APPOLO}: {message_link}", ephemeral=True)
+            await send_with_fallback(ctx, f"{ERROR_NOT_APPOLO}: {message_link}", ephemeral=True)
             return
         event_mentions = []
-        await ctx.guild.chunk()
+        # await ctx.guild.chunk()
+        guild_chunk_with_timeout(ctx.guild)
         role_members = set(member.id for member in role.members)
         if role2:
             role_members |= set(member.id for member in role2.members)
         if role3:
             role_members |= set(member.id for member in role3.members)
         if not role_members:
-            await ctx.response.send_message(f"{MISSING_MENTIONS_ERROR_NO_MEMBERS}: **{role.name}**.", ephemeral=True)
+            await send_with_fallback(ctx, f"{MISSING_MENTIONS_ERROR_NO_MEMBERS}: **{role.name}**.", ephemeral=True)
             return
         for field in message.embeds[0].fields:
             if field.value[:6] != '>>> <@':
@@ -596,12 +626,12 @@ async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message
             event_mentions.extend([int(m) for m in mentions.split('\n') if m])
         missing_reactions_list = set(role_members) - set(event_mentions)
         if not missing_reactions_list:
-            await ctx.response.send_message(f"{MISSING_MENTIONS_MEMBERS_ALL_REACTED} {message_link}.", ephemeral=True)
+            await send_with_fallback(ctx, f"{MISSING_MENTIONS_MEMBERS_ALL_REACTED} {message_link}.", ephemeral=True)
             return
         missing_reactions_str = "\n".join(f"<@{reaction}>" for reaction in missing_reactions_list)
-        await ctx.response.send_message(f"{message_link} {MISSING_MENTIONS_RESPONSE_SUCCESS}:\n{missing_reactions_str}")
+        await send_with_fallback(ctx, f"{message_link} {MISSING_MENTIONS_RESPONSE_SUCCESS}:\n{missing_reactions_str}")
     except Exception as e:
-        await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(ctx, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; {type(role)}; {type(role2)}; {type(role3)}; traceback: {traceback.format_exc()}")
 
 @bot.command()
@@ -633,17 +663,18 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
                         message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
                         break
             if not message_link:
-                await ctx.response.send_message(f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_VOICE_CANNOT_FIND_MESSAGE}.", ephemeral=True)
+                await send_with_fallback(ctx, f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_VOICE_CANNOT_FIND_MESSAGE}.", ephemeral=True)
                 return
-        await ctx.guild.chunk()
+        # await ctx.guild.chunk()
+        guild_chunk_with_timeout(ctx.guild)
         voice_channel_names = {vc.name.lower().replace(' ', '_'):vc.name for vc in ctx.guild.voice_channels}
         matches = difflib.get_close_matches(voice_name.lower().replace(' ', '_'), voice_channel_names.keys(), n=3, cutoff=0.5)
         if not matches:
-            await ctx.response.send_message(f"{MISSING_VOICE_ERROR_NO_CHANNEL_MATCHES}: **{voice_name}**.", ephemeral=True)
+            await send_with_fallback(ctx, f"{MISSING_VOICE_ERROR_NO_CHANNEL_MATCHES}: **{voice_name}**.", ephemeral=True)
             return
         if len(matches) > 1:
             view = missingVoiceChannelSelectView(matches, voice_channel_names, ctx, message_link)
-            await ctx.response.send_message(f"{MISSING_VOICE_MULTIPLE_MATCHES_FIRST}\n{MISSING_VOICE_MULTIPLE_MATCHES_SECOND}:", view=view, ephemeral=True)
+            await send_with_fallback(ctx, f"{MISSING_VOICE_MULTIPLE_MATCHES_FIRST}\n{MISSING_VOICE_MULTIPLE_MATCHES_SECOND}:", view=view, ephemeral=True)
             await view.wait()
             if view.result is None:
                 await ctx.edit_original_response(content=f"{MISSING_VOICE_CANCEL_MULTIPLE_SELECT}.", view=None, ephemeral=True)
@@ -651,10 +682,10 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
             return #await missing_voice_handler(ctx, view.result, message_link)
         if len(matches) == 1:
             channel_name = voice_channel_names[matches[0]]
-            await ctx.response.send_message(f"{MISSING_VOICE_EXACT_MATCH_CHANNEL}: **{channel_name}**", ephemeral=True)
+            await send_with_fallback(ctx, f"{MISSING_VOICE_EXACT_MATCH_CHANNEL}: **{channel_name}**", ephemeral=True)
             await missing_voice_handler(ctx, channel_name, message_link)
     except Exception as e:
-        await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(ctx, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; {voice_name}; traceback: {traceback.format_exc()}")
 
 @bot.tree.command(name="generate_roster", description=f"{GENERATE_ROSTER_COMMAND_DESCRIPTION}.")
@@ -727,7 +758,8 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
         'жовтий':'🟨'
     }
     try:
-        await guild.chunk()
+        # await guild.chunk()
+        guild_chunk_with_timeout(guild)
         message = await fetch_message_from_url(ctx, message_link)
         guild_discord_members = guild.members
         guild_members = {member.name.lower():member.id for member in guild_discord_members if member.name is not None}
@@ -775,14 +807,14 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
         if return_text:
             message_text = f"{GENERATE_ROSTER_SUCCESS}:\n{'\n'.join(return_text)}"
             if len(message_text) > DISCORD_MAX_MESSAGE_LEN:
-                await ctx.response.send_message(f"{message_text[:DISCORD_MAX_MESSAGE_LEN-3]}...")
+                await send_with_fallback(ctx, f"{message_text[:DISCORD_MAX_MESSAGE_LEN-3]}...")
             else:  
-                await ctx.response.send_message(message_text)
+                await send_with_fallback(ctx, message_text)
         else:
-            await ctx.response.send_message(f"{GENERATE_ROSTER_FAILED}:{message_link}")
+            await send_with_fallback(ctx, f"{GENERATE_ROSTER_FAILED}:{message_link}")
         return
     except Exception as e:
-        await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(ctx, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; traceback: {traceback.format_exc()}")
 
 @bot.tree.command(name="ping_tentative", description=f"{PING_TENTATIVE_COMMAND_DESCRIPTION}.")
@@ -800,13 +832,13 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
                     message_link = f"https://discord.com/channels/{ctx.guild.id}/{ctx.channel.id}/{message.id}"
                     break
             if not message_link:
-                await ctx.response.send_message(f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_MENTIONS_CANNOT_FIND_APOLLO_MESSAGE}.", ephemeral=True)
+                await send_with_fallback(ctx, f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_MENTIONS_CANNOT_FIND_APOLLO_MESSAGE}.", ephemeral=True)
                 return
         message = await fetch_message_from_url(ctx, message_link)
         if not message:
             return
         if message.author.id != apollo_id:
-            await ctx.response.send_message(f"{ERROR_NOT_APPOLO}: {message_link}", ephemeral=True)
+            await send_with_fallback(ctx, f"{ERROR_NOT_APPOLO}: {message_link}", ephemeral=True)
             return
         event_mentions = []
         for field in message.embeds[0].fields:
@@ -814,12 +846,12 @@ async def ping_tentative(ctx: discord.Interaction, message_link: str = None):
                 mentions = field.value[4:].replace('<@', '').replace('>', '')
                 event_mentions.extend([int(m) for m in mentions.split('\n') if m])
         if not event_mentions:
-            await ctx.response.send_message(f"{PING_TENTATIVE_MENTIONS_MEMBERS_ALL_REACTED} {message_link}.", ephemeral=True)
+            await send_with_fallback(ctx, f"{PING_TENTATIVE_MENTIONS_MEMBERS_ALL_REACTED} {message_link}.", ephemeral=True)
             return
         ping_tentative_str = "\n".join(f"<@{reaction}>" for reaction in event_mentions)
-        await ctx.response.send_message(f"{PING_TENTATIVE_RESPONSE_SUCCESS}:\n{ping_tentative_str}")
+        await send_with_fallback(ctx, f"{PING_TENTATIVE_RESPONSE_SUCCESS}:\n{ping_tentative_str}")
     except Exception as e:
-        await ctx.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(ctx, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {message_link}; traceback: {traceback.format_exc()}")
 
 @bot.tree.command(name="grafana_ignore", description=f"{GRAFANA_IGNORE_COMMAND_DESCRIPTION}.")
@@ -842,29 +874,29 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
     try:
         conn = get_db_connection()
     except Exception as e:
-        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        await send_with_fallback(interaction,f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
         logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
         return
     try:
         with conn.cursor() as cursor:
             if player_id is None:
                 if not (name or steam_id):
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_NEED_ID_OR_NAME}.", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_IGNORE_NEED_ID_OR_NAME}.", ephemeral=True)
                     return
                 elif name and not steam_id:
                     if re.search(r"([`'\";]|--{2,})", name):
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
                         logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
                         return
                     try:
                         cursor.execute("SELECT id, lastName, steamID FROM dblog_players WHERE lastName LIKE %s", ('%' + name + '%',))
                         results = cursor.fetchall()
                     except Exception as e:
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                         logger.error(f"Select query failed for name: {name}; Exception: {e}; traceback: {traceback.format_exc()}")
                         return
                     if not results:
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_NAME_SEARCH_NO_RESULTS}: {name}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_NAME_SEARCH_NO_RESULTS}: {name}", ephemeral=True)
                         return
                     elif len(results) == 1:
                         player_id = results[0]['id']
@@ -874,34 +906,34 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
                             message += f"\n### {GRAFANA_IGNORE_NAME_STR}: `{r['lastName']}`:\n- {GRAFANA_INGORE_ID_STR}: `{r['id']}`\n- {GRAFANA_IGNORE_STEAMID_STR}: `{r['steamID']}`"
                         if len(message) > DISCORD_MAX_MESSAGE_LEN:
                             message = f"{message[:DISCORD_MAX_MESSAGE_LEN-3]}..."
-                        await interaction.response.send_message(message, ephemeral=True)
+                        await send_with_fallback(interaction, message, ephemeral=True)
                         return
                 else:
                     try:
                         cursor.execute("SELECT id, lastName, steamID FROM dblog_players WHERE steamID = %s", (steam_id,))
                         results = cursor.fetchall()
                     except Exception as e:
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                         logger.error(f"Select query failed for steamID: {steam_id}; Exception: {e}; traceback: {traceback.format_exc()}")
                         return
                     if not results:
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_STEAMID_SEARCH_NO_RESULTS}: {steam_id}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_STEAMID_SEARCH_NO_RESULTS}: {steam_id}", ephemeral=True)
                         return
                     elif len(results) == 1:
                         player_id = results[0]['id']
                     else:
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                         logger.warning(f"Select query for steamID: {steam_id} returned multiple results")
                         return
             try:
                 cursor.execute("SELECT id FROM dblog_players WHERE id = %s", (player_id,))
                 existing = cursor.fetchone()
             except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                 logger.error(f"Select query failed for id: {player_id}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
             if not existing:
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_NO_ID_FOUND}: {player_id}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_NO_ID_FOUND}: {player_id}", ephemeral=True)
                 return
             ignore_value = ignore #1 if ignore else 0
             try:
@@ -911,15 +943,15 @@ async def grafana_ignore(interaction: discord.Interaction, ignore: int, player_i
                 updated = cursor.fetchone()
                 updated_ignore = GRAFANA_IGNORE_IGNORED if updated['ignore'] == 1 else GRAFANA_IGNORE_UNIGNORED
             except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                 logger.error(f"Select query failed for id: {player_id}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
-            await interaction.response.send_message(
+            await send_with_fallback(interaction, 
                     f"### {GRAFANA_IGNORE_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_IGNORE_NAME_STR}: `{updated['lastName']}`,\n- {GRAFANA_IGNORE_STEAMID_STR}: `{updated['steamID']}`,\n- {GRAFANA_IGNORE_STATUS_STR}: `{updated_ignore}`.",
                     ephemeral=False
                 )
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {ignore}, {player_id}, {name}, {steam_id}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
@@ -977,56 +1009,56 @@ async def grafana_invite(interaction: discord.Interaction, name:str, email:str =
         try:
             response_get_noduplicates = requests.get(invites_endpoint, headers=header)
         except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
                 logger.error(f"HTTP request failed on invite url retrieval; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
         if response_get_noduplicates.status_code == 200:
             exists, url = check_invites(response_get_noduplicates.json(), name)
         else:
-            await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+            await send_with_fallback(interaction, f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
             logger.error(f"Did not receive proper response for get invites for duplicates. Status: {response_get.status_code}, Text: {response_get.text}")
             return
         if exists:
-            await interaction.response.send_message(f"{GRAFANA_INVITE_SUCCESS}: ```{url}```", ephemeral=True)
+            await send_with_fallback(interaction, f"{GRAFANA_INVITE_SUCCESS}: ```{url}```", ephemeral=True)
             logger.info(f"Retrieved existing invite for user: {name}, url: {url}")
             return
         else:
             try:
                 response_post = requests.post(invites_endpoint, json=data, headers=header)
             except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
                 logger.error(f"HTTP request failed on invite creation; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
             if response_post.status_code == 200:
                 try:
                     response_get = requests.get(invites_endpoint, headers=header)
                 except Exception as e:
-                    await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
                     logger.error(f"HTTP request failed on invite url retrieval; Exception: {e}; traceback: {traceback.format_exc()}")
                     return
                 if response_get.status_code == 200:
                     exists, url = check_invites(response_get.json(), name)
                     if not url:
-                        await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
                         logger.error(f"Did not get an URL for created user: {name}")
                         return
-                    await interaction.response.send_message(f"{GRAFANA_INVITE_SUCCESS}: ```{url}```", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_INVITE_SUCCESS}: ```{url}```", ephemeral=True)
                     logger.info(f"Generated invite for user: {name}, url: {url}")
                     return
                 else:
-                    await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
                     logger.error(f"Did not receive proper response for list of invites. Status: {response_get.status_code}, Text: {response_get.text}")
                     return
             elif response_post.status_code == 412:
-                await interaction.response.send_message(f"{GRAFANA_INVITE_USER_ALREADY_EXISTS}: `{name}`", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_INVITE_USER_ALREADY_EXISTS}: `{name}`", ephemeral=True)
                 logger.warning(f"Tried to create an invite for already existing user: {name}")
                 return
             else:
-                await interaction.response.send_message(f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_INVITE_GENERIC_HTTP_FAIL}", ephemeral=True)
                 logger.error(f"Did not receive proper response for create invite. Status: {response_get.status_code}, Text: {response_get.text}")
                 return
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {name}; traceback: {traceback.format_exc()}")
 
 @bot.tree.command(name="match_history_add", description=f"{MATCH_HISTORY_ADD_DESCRIPTION}.")
@@ -1091,15 +1123,15 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
     if errors:
         msg = f"{MATCH_HISTORY_ADD_DATA_PARSE_ERROR}: {errors}"
         if len(msg) > DISCORD_MAX_MESSAGE_LEN:
-            await interaction.response.send_message(f"{msg[:DISCORD_MAX_MESSAGE_LEN-3]}...", ephemeral=True)
+            await send_with_fallback(interaction, f"{msg[:DISCORD_MAX_MESSAGE_LEN-3]}...", ephemeral=True)
         else:  
-            await interaction.response.send_message(msg, ephemeral=True)
+            await send_with_fallback(interaction, msg, ephemeral=True)
         logger.error(f"Parsing data failed for match_history_add. Input: {data}, Errors: {errors}")
         return
     try:
         conn = get_db_connection()
     except Exception as e:
-        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
         logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
         return
     try:
@@ -1107,7 +1139,7 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
             for value in parsed_data_dict.values():
                 if isinstance(value, str):
                     if re.search(r"([`'\";]|--{2,})", value):
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {value}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {value}", ephemeral=True)
                         logger.warning(f"Catched SQL inject attempt: {value}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
                         return
             try:
@@ -1129,30 +1161,30 @@ async def match_history_add(interaction: discord.Interaction, data:str): # data:
                 conn.commit()
             except pymysql.IntegrityError as e:
                 if e.args[0] == 1062:
-                    await interaction.response.send_message(f"{MATCH_HISTORY_ADD_DUPLICATE_RECORD_ERROR}: {parsed_data_dict.get("event_name")}", ephemeral=True)
+                    await send_with_fallback(interaction, f"{MATCH_HISTORY_ADD_DUPLICATE_RECORD_ERROR}: {parsed_data_dict.get("event_name")}", ephemeral=True)
                     logger.error(f"Insert for match_history_add failed - match already exists: {parsed_data_dict.get("event_name")}; Exception: {e}")
                     return
                 else:
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                     logger.error(f"Insert for match_history_add failed: {parsed_data_dict}; Exception: {e}; traceback: {traceback.format_exc()}")
                     return
             except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                 logger.error(f"Insert for match_history_add failed: {parsed_data_dict}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
             try:
                 cursor.execute("SELECT event_name, `date`, layer, opponent FROM match_history WHERE id = %s", (new_row_id,))
                 existing = cursor.fetchone()
             except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                 logger.error(f"Select inserted row for match_history_add failed, rowID: {new_row_id}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
-            await interaction.response.send_message(
+            await send_with_fallback(interaction, 
                 f"### {MATCH_HISTORY_ADD_SUCCESS_TEXT}:\n- {MATCH_HISTORY_ADD_SUCCESS_EVENT_NAME}: {existing['event_name']},\n- {MATCH_HISTORY_ADD_SUCCESS_DATE}: {existing['date']},\n- {MATCH_HISTORY_ADD_SUCCESS_LAYER}: `{existing['layer']}`,\n- {MATCH_HISTORY_ADD_SUCCESS_OPPONENT}: {existing['opponent']}.",
                 ephemeral=False
             )
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {data}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
@@ -1175,7 +1207,7 @@ async def autopost_enable(interaction: discord.Interaction, status:int):
     try:
         if status == 1:
             autopost_enabled = True
-            await interaction.response.send_message(f"{AUTOPOST_ENABLE_COMMAND_ENABLED}.", ephemeral=False)
+            await send_with_fallback(interaction, f"{AUTOPOST_ENABLE_COMMAND_ENABLED}.", ephemeral=False)
             if not daily_autopost.is_running():
                 await before_daily_autopost()
                 daily_autopost.start()
@@ -1183,9 +1215,9 @@ async def autopost_enable(interaction: discord.Interaction, status:int):
             autopost_enabled = False
             if daily_autopost.is_running():
                 daily_autopost.cancel()
-            await interaction.response.send_message(f"{AUTOPOST_ENABLE_COMMAND_DISABLED}.", ephemeral=False)
+            await send_with_fallback(interaction, f"{AUTOPOST_ENABLE_COMMAND_DISABLED}.", ephemeral=False)
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {status}; traceback: {traceback.format_exc()}")
 
 @bot.tree.command(name="server_info", description=f"{SERVER_INFO_DESCRIPTION}.")
@@ -1215,7 +1247,7 @@ async def server_info(interaction: discord.Interaction, server:str, ping:int = 0
     try:
         server_details = Servers.get(server, {})
         if not server_details and not name and not password:
-            await interaction.response.send_message(f"{SERVER_INFO_ERROR_NO_INFO}.", ephemeral=True)
+            await send_with_fallback(interaction, f"{SERVER_INFO_ERROR_NO_INFO}.", ephemeral=True)
             logger.error(f"server_info failed: no server details were provided: {server_details}, {name}, {password}")
         response = f"# {SERVER_INFO_SERVER_STR}: ```{server_details.get("name", name)}``` \n # {SERVER_INFO_PASS_STR}: ```{server_details.get("pass", password)}``` \n"
         if ping == 1:
@@ -1239,9 +1271,9 @@ async def server_info(interaction: discord.Interaction, server:str, ping:int = 0
             except Exception as e:
                 logger.warning(f"server_info failed to add pings: {e}; traceback: {traceback.format_exc()}")
                 response += f" || {SERVER_INFO_ERROR_FAILED_TO_GET_PINGS} || "
-        await interaction.response.send_message(f"{SERVER_INFO_SUCCESS}:\n{response}", ephemeral=False)
+        await send_with_fallback(interaction, f"{SERVER_INFO_SUCCESS}:\n{response}", ephemeral=False)
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {[server, ping, name, password]}; traceback: {traceback.format_exc()}")
 
 @bot.tree.command(name="grafana_update_match", description=f"{GRAFANA_UPDATE_MATCH_COMMAND_DESCRIPTION}.")
@@ -1263,14 +1295,14 @@ async def grafana_update_match(interaction: discord.Interaction, ignore: int, ma
     try:
         conn = get_db_connection()
     except Exception as e:
-        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
         logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
         return
     try:
         with conn.cursor() as cursor:
             if name:
                 if re.search(r"([`'\";]|--{2,})", name):
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
                     logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
                     return
                 try:
@@ -1279,15 +1311,15 @@ async def grafana_update_match(interaction: discord.Interaction, ignore: int, ma
                     cursor.execute("SELECT id, `displayName`, `layerClassname`, `ignore` FROM dblog_matches WHERE id = %s", (match_id))
                     updated = cursor.fetchone()
                     if not updated:
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_NO_ID_FOUND}: {match_id}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_NO_ID_FOUND}: {match_id}", ephemeral=True)
                         return
                     updated_ignore = GRAFANA_IGNORE_IGNORED if updated['ignore'] == 1 else GRAFANA_IGNORE_UNIGNORED
-                    await interaction.response.send_message(
+                    await send_with_fallback(interaction, 
                     f"### {GRAFANA_UPDATE_MATCH_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_UPDATE_MATCH_NAME_STR}: `{updated['displayName']}`,\n- {GRAFANA_UPDATE_MATCH_MAP_STR}: `{updated['layerClassname']}`,\n- {GRAFANA_IGNORE_STATUS_STR}: `{updated_ignore}`.",
                     ephemeral=False
                     )
                 except Exception as e:
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                     logger.error(f"Select and update query failed for id: {match_id}; Exception: {e}; traceback: {traceback.format_exc()}")
                     return
             else:
@@ -1297,19 +1329,19 @@ async def grafana_update_match(interaction: discord.Interaction, ignore: int, ma
                     cursor.execute("SELECT id, `displayName`, `layerClassname`, `ignore` FROM dblog_matches WHERE id = %s", (match_id))
                     updated = cursor.fetchone()
                     if not updated:
-                        await interaction.response.send_message(f"{GRAFANA_IGNORE_NO_ID_FOUND}: {match_id}", ephemeral=True)
+                        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_NO_ID_FOUND}: {match_id}", ephemeral=True)
                         return
                     updated_ignore = GRAFANA_IGNORE_IGNORED if updated['ignore'] == 1 else GRAFANA_IGNORE_UNIGNORED
-                    await interaction.response.send_message(
+                    await send_with_fallback(interaction, 
                     f"### {GRAFANA_UPDATE_MATCH_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_UPDATE_MATCH_NAME_STR}: `{updated['displayName']}`,\n- {GRAFANA_UPDATE_MATCH_MAP_STR}: `{updated['layerClassname']}`,\n- {GRAFANA_IGNORE_STATUS_STR}: `{updated_ignore}`.",
                     ephemeral=False
                     )
                 except Exception as e:
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                     logger.error(f"Select and update query failed for id: {match_id}; Exception: {e}; traceback: {traceback.format_exc()}")
                     return
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {ignore}, {match_id}, {name}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
@@ -1327,27 +1359,27 @@ async def grafana_add_match(interaction: discord.Interaction, name:str, map:str,
     try:
         conn = get_db_connection()
     except Exception as e:
-        await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+        await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
         logger.error(f"Connection failed to db; Exception: {e}; traceback: {traceback.format_exc()}")
         return
     try:
         with conn.cursor() as cursor:
             if re.search(r"([`'\";]|--{2,})", name):
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {name}", ephemeral=True)
                 logger.warning(f"Catched SQL inject attempt: {name}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
                 return
             if re.search(r"([`'\";]|--{2,})", map):
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {map}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {map}", ephemeral=True)
                 logger.warning(f"Catched SQL inject attempt: {map}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
                 return
             if re.search(r"([`'\";]|--{2,})", date):
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {map}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_SQL_INJECT_PROTECTION}: {map}", ephemeral=True)
                 logger.warning(f"Catched SQL inject attempt: {date}. Discord user ID: {interaction.user.id if interaction.user.id else None}")
                 return
             try:
                 parse_date_check = datetime.strptime(date, "%Y-%m-%d %H:%M")
             except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_ADD_MATCH_INVALID_DATE_FORMAT}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_ADD_MATCH_INVALID_DATE_FORMAT}", ephemeral=True)
                 logger.warning(f"Invalid date format received for grafana_add_match: {date}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
             try:
@@ -1358,18 +1390,18 @@ async def grafana_add_match(interaction: discord.Interaction, name:str, map:str,
                 cursor.execute("SELECT id, `displayName`, `layerClassname` FROM dblog_matches WHERE id = %s", (new_id))
                 updated = cursor.fetchone()
                 if not updated:
-                    await interaction.response.send_message(f"{GRAFANA_IGNORE_NO_ID_FOUND}: {new_id}", ephemeral=True)
+                    await send_with_fallback(interaction, f"{GRAFANA_IGNORE_NO_ID_FOUND}: {new_id}", ephemeral=True)
                     return
-                await interaction.response.send_message(
+                await send_with_fallback(interaction, 
                 f"### {GRAFANA_ADD_MATCH_SUCCESS}:\n- {GRAFANA_INGORE_ID_STR}: `{updated['id']}`,\n- {GRAFANA_UPDATE_MATCH_NAME_STR}: `{updated['displayName']}`,\n- {GRAFANA_UPDATE_MATCH_MAP_STR}: `{updated['layerClassname']}`.",
                 ephemeral=False
                 )
             except Exception as e:
-                await interaction.response.send_message(f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
+                await send_with_fallback(interaction, f"{GRAFANA_IGNORE_GENERIC_DB_FAIL}", ephemeral=True)
                 logger.error(f"Select and update query failed for args: {[name, map, date]}; Exception: {e}; traceback: {traceback.format_exc()}")
                 return
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {[name, map, date]}; traceback: {traceback.format_exc()}")
     finally:
         conn.close()
@@ -1383,7 +1415,7 @@ async def grafana_add_match(interaction: discord.Interaction, name:str, map:str,
 @commands.guild_only()
 async def grafana_add_stats(interaction: discord.Interaction, match_id:int, data: discord.Attachment):
     # await interaction.response.defer(thinking=True)  # Tells Discord you're processing
-    await interaction.response.send_message(f"{discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=False)
+    await send_with_fallback(interaction, f"{discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=False)
     initial_message = await interaction.original_response()
     logger.info(f"Received grafana_add_stats: {match_id}, from user: {interaction.user.name} <@{interaction.user.id}>")
     if not data.filename.lower().endswith(".csv"):
@@ -1431,7 +1463,7 @@ async def grafana_add_stats(interaction: discord.Interaction, match_id:int, data
             await initial_message.delete()
             await interaction.followup.send(f"{GRAFANA_ADD_STATS_FAILED_TO_PARSE_CSV}", ephemeral=False)
         except Exception as ee:
-            await interaction.response.send_message(f"{GRAFANA_ADD_STATS_FAILED_TO_PARSE_CSV}", ephemeral=True)
+            await send_with_fallback(interaction, f"{GRAFANA_ADD_STATS_FAILED_TO_PARSE_CSV}", ephemeral=True)
         logger.error(f"Failed to parse csv: {e}; traceback: {traceback.format_exc()}")
         return
     if not query_list:
@@ -1492,14 +1524,14 @@ async def count_attendance(interaction: discord.Interaction, category: discord.C
         try:
             check_from = datetime.strptime(check_from, "%d.%m.%Y").replace(tzinfo=timezone.utc)
         except Exception:
-            await interaction.response.send_message(f"{COUNT_ATTENDANCE_ERROR_CANNOT_CONVERT_TO_TIMESTAMP}: {check_from}", ephemeral=True)
+            await send_with_fallback(interaction, f"{COUNT_ATTENDANCE_ERROR_CANNOT_CONVERT_TO_TIMESTAMP}: {check_from}", ephemeral=True)
             return
     channels = [
         channel for channel in category.channels
         if isinstance(channel, (discord.TextChannel)) and channel.created_at >= (check_from - timedelta(days=7))
     ]
     if not channels:
-        await interaction.response.send_message(f"{COUNT_ATTENDANCE_ERROR_NO_CHANNELS}: {category.name}, {COUNT_ATTENDANCE_ERROR_NO_CHANNELS_CREATED_AFTER} <t:{int((check_from - timedelta(days=7)).timestamp())}:D>", ephemeral=True)
+        await send_with_fallback(interaction, f"{COUNT_ATTENDANCE_ERROR_NO_CHANNELS}: {category.name}, {COUNT_ATTENDANCE_ERROR_NO_CHANNELS_CREATED_AFTER} <t:{int((check_from - timedelta(days=7)).timestamp())}:D>", ephemeral=True)
         return # no channels found
     try:
         initial_response = COUNT_ATTENDANCE_THINKING.format(
@@ -1507,7 +1539,7 @@ async def count_attendance(interaction: discord.Interaction, category: discord.C
             category=category.name,
             date=int(check_from.timestamp())
         )
-        await interaction.response.send_message(f"{initial_response} {discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=False)
+        await send_with_fallback(interaction, f"{initial_response} {discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=False)
         initial_message = await interaction.original_response()
         attendance = {}
         channel_count = 0
@@ -1573,7 +1605,7 @@ async def count_attendance(interaction: discord.Interaction, category: discord.C
         except Exception as ee:
             logger.error(f"Wasn't able to delete initial message: {ERROR_GENERIC}: {ee}; args: {category.name}, {user.display_name}, {check_from}; traceback: {traceback.format_exc()}")
         try:    # respond with ephemeral message
-            await interaction.response.send_message(f"{error_text}", ephemeral=True)
+            await send_with_fallback(interaction, f"{error_text}", ephemeral=True)
         except Exception as ee:
             logger.info(f"Wasn't able to respond to original interaction: {ee}; args: {category.name}, {user.display_name}, {check_from}")
             try:    # if can't respond to interaction - send another message
@@ -1626,12 +1658,12 @@ async def copy_role(interaction: discord.Interaction, role_from: discord.Role, r
                         logger.error(f"{COPY_ROLE_ERROR_CHANNEL} '{category.name}': {e}")
                         error_list.append(f"{COPY_ROLE_ERROR_CHANNEL} '{category.name}': {e}")
         errors_string = COPY_ROLE_NO_ERRORS if not error_list else f"{COPY_ROLE_WITH_ERRORS}{'\n'.join(error_list)}"
-        await interaction.response.send_message(COPY_ROLE_SUCCESS.format(role_from=role_from.mention, new_role=new_role.mention, errors=errors_string), ephemeral=True)
+        await send_with_fallback(interaction, COPY_ROLE_SUCCESS.format(role_from=role_from.mention, new_role=new_role.mention, errors=errors_string), ephemeral=True)
     except discord.errors.Forbidden:
-        await interaction.response.send_message(f"{COPY_ROLE_ERROR_NO_PERM_ROLE_MANAGE}.", ephemeral=True)
+        await send_with_fallback(interaction, f"{COPY_ROLE_ERROR_NO_PERM_ROLE_MANAGE}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {role_from.name}, {role_to};")
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {role_from.name}, {role_to}; traceback: {traceback.format_exc()}")
     return
 
@@ -1651,12 +1683,12 @@ async def copy_category(interaction: discord.Interaction, category_from: discord
         for target, perms in category_from.overwrites.items():
             overwrites[target] = perms
         new_category = await interaction.guild.create_category(name=category_to, overwrites=overwrites)
-        await interaction.response.send_message(COPY_CATEGORY_SUCCESS.format(category_from=category_from.name, category_to=new_category.name), ephemeral=True)
+        await send_with_fallback(interaction, COPY_CATEGORY_SUCCESS.format(category_from=category_from.name, category_to=new_category.name), ephemeral=True)
     except discord.errors.Forbidden:
-        await interaction.response.send_message(f"{COPY_CATEGORY_ERROR_NO_PERM}.", ephemeral=True)
+        await send_with_fallback(interaction, f"{COPY_CATEGORY_ERROR_NO_PERM}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to};")
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to}; traceback: {traceback.format_exc()}")
     return
 
@@ -1670,24 +1702,24 @@ async def copy_category(interaction: discord.Interaction, category_from: discord
 async def echo(interaction: discord.Interaction, what: str, where: discord.TextChannel):
     logger.info(f"Received echo: {what}, {where.name}, from user: {interaction.user.name} <@{interaction.user.id}>")
     if interaction.user.id == 665907321519472672:
-        await interaction.response.send_message(f"Ладос йди нахій.", ephemeral=False)
+        await send_with_fallback(interaction, f"Ладос йди нахій.", ephemeral=False)
         logger.error(f"{ERROR_GENERIC}: LADDOS PIDOR; args: {what}, {where.name};")
         return
     if interaction.user.id != 281480977707040769:
-        await interaction.response.send_message(f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
+        await send_with_fallback(interaction, f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: NO PERMS USER; args: {what}, {where.name};")
         return
     try:
         await where.send(what)
-        await interaction.response.send_message(f"{ECHO_DONE}.", ephemeral=True)
+        await send_with_fallback(interaction, f"{ECHO_DONE}.", ephemeral=True)
     except discord.errors.Forbidden:
-        await interaction.response.send_message(f"{GIF_ARCHIVE_BOT_NO_PERMISSIONS}.", ephemeral=True)
+        await send_with_fallback(interaction, f"{GIF_ARCHIVE_BOT_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {what}, {where.name};")
     except commands.MissingAnyRole:
-        await interaction.response.send_message(f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
+        await send_with_fallback(interaction, f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {what}, {where.name};")
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {what}, {where.name}; traceback: {traceback.format_exc()}")
     return
 
@@ -1703,15 +1735,15 @@ async def echo(interaction: discord.Interaction, what: str, where: discord.TextC
 async def gif_archive(interaction: discord.Interaction, gif: str):
     logger.info(f"Received gif_archive: {gif}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
-        await interaction.response.send_message(f"{gif}", ephemeral=False)
+        await send_with_fallback(interaction, f"{gif}", ephemeral=False)
     except discord.errors.Forbidden:
-        await interaction.response.send_message(f"{GIF_ARCHIVE_BOT_NO_PERMISSIONS}.", ephemeral=True)
+        await send_with_fallback(interaction, f"{GIF_ARCHIVE_BOT_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {gif};")
     except commands.MissingAnyRole:
-        await interaction.response.send_message(f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
+        await send_with_fallback(interaction, f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {gif};")
     except Exception as e:
-        await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {gif}; traceback: {traceback.format_exc()}")
     return
 
