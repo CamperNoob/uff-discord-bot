@@ -55,7 +55,7 @@ autopost_enabled = autopost_conf.get("enabled", False)
 
 message_pool = []
 
-bot = commands.Bot(command_prefix="/", intents=intents)
+bot = commands.Bot(command_prefix="/", intents=intents, reconnect=True)
 
 gemini = None
 
@@ -184,6 +184,27 @@ async def fetch_message_from_url(ctx: discord.Interaction, message_link):
         return None
 
 @bot.event
+async def on_disconnect():
+    logger.warning("Bot disconnected from Discord websocket!")
+
+@bot.event
+async def on_connect():
+    logger.info("Bot connected to Discord websocket.")
+
+resume_counter = 0
+
+@bot.event
+async def on_resumed():
+    global resume_counter
+    resume_counter += 1
+    logger.warning(f"Session resumed ({resume_counter} times). (Gateway instability)")
+    
+    if resume_counter > 5:
+        logger.error("Too many resume attempts — performing clean reconnect.")
+        resume_counter = 0
+        await bot.close()
+
+@bot.event
 async def on_ready():
     global gemini
     logger.info(f'Logged in as {bot.user}')
@@ -245,7 +266,7 @@ async def on_voice_state_update(member, before, after):
             temp_channels[temp_channel.id] = member.id
 
             await member.move_to(temp_channel)
-
+            
             # Explicitly set the position after creation
             await temp_channel.edit(position=hub_channel.position + 1)
         
