@@ -256,64 +256,67 @@ async def on_ready():
 @bot.event
 async def on_voice_state_update(member, before, after):
     after_id = after.channel.id if after.channel else None
+    guild = member.guild
 
     if temp_channels:
         to_delete = []
         for channel_id, info in temp_channels.items():
             if (info["created_at"] + timedelta(seconds = 5)) > datetime.now(timezone.utc):
                 continue
-            channel = member.guild.get_channel(channel_id)
+            channel = guild.get_channel(channel_id)
             if channel is None:
                 to_delete.append(channel_id)
                 continue
             if len(channel.members) == 0:
                 to_delete.append(channel_id)
         for channel_id in to_delete:
-            channel = member.guild.get_channel(channel_id)
+            channel = guild.get_channel(channel_id)
             try:
                 if channel:
                     await channel.delete(reason="Temporary voice channel cleanup")
             except Exception as delete_error:
-                logger.warning(
-                    f"Failed to delete temp channel {channel_id}: {delete_error}"
-                )
-            finally:
-                temp_channels.pop(channel_id, None)
-
-    if (
-        (after_id in hub_channel_ids)
-    ):
-        try:
-        
-            if after.channel and after.channel.id in hub_channel_ids:
-                guild = member.guild
-                hub_channel = after.channel
-
-                if not re.match(r'[A-Za-z\u0400-\u04FF0-9]', hub_channel.name[0], re.UNICODE):
-                    prefix = hub_channel.name[0]
+                logger.warning(f"Failed to delete temp channel {channel_id}: {delete_error}")
+            else:
+                if guild.get_channel(channel_id) is None:
+                    temp_channels.pop(channel_id, None)
                 else:
-                    prefix = ''
+                    try:
+                        await bot.fetch_channel(channel_id)
+                        logger.warning(f"Channel {channel_id} still exists after delete attempt")
+                    except discord.errors.NotFound:
+                        temp_channels.pop(channel_id, None)
+                    except Exception:
+                        logger.exception(f"Unexpected exception during fetch in delete channel process")
 
-                temp_channel = await guild.create_voice_channel(
-                    name=f"{prefix} {member.display_name}'s voice",
-                    category=hub_channel.category,
-                    bitrate=hub_channel.bitrate,
-                    user_limit=hub_channel.user_limit,
-                    overwrites=hub_channel.overwrites #,
-                    #position=hub_channel.position + 1
-                )
+    if (after_id is not None and after_id in hub_channel_ids):
+        try:
+            hub_channel = after.channel
 
-                overwrite = temp_channel.overwrites_for(member)
-                overwrite.move_members = True
+            if not re.match(r'[A-Za-z\u0400-\u04FF0-9]', hub_channel.name[0], re.UNICODE):
+                prefix = hub_channel.name[0]
+            else:
+                prefix = ''
 
-                await temp_channel.set_permissions(member, overwrite=overwrite)
+            temp_channel = await guild.create_voice_channel(
+                name=f"{prefix} {member.display_name}'s voice",
+                category=hub_channel.category,
+                bitrate=hub_channel.bitrate,
+                user_limit=hub_channel.user_limit,
+                overwrites=hub_channel.overwrites #,
+                #position=hub_channel.position + 1
+            )
 
-                temp_channels[temp_channel.id] = {"owner":member.id, "created_at":datetime.now(timezone.utc)}
+            temp_channels[temp_channel.id] = {"owner":member.id, "created_at":datetime.now(timezone.utc)}
 
-                await member.move_to(temp_channel)
-                
-                # Explicitly set the position after creation
-                await temp_channel.edit(position=hub_channel.position + 1)
+            overwrite = temp_channel.overwrites_for(member)
+            overwrite.move_members = True
+
+            await temp_channel.set_permissions(member, overwrite=overwrite)
+
+            await member.move_to(temp_channel)
+            
+            # Explicitly set the position after creation
+            await temp_channel.edit(position=hub_channel.position + 1)
 
         except Exception as e:
             logger.exception(f"Error in on_voice_status_update for member {member.id}: {e}")
@@ -322,20 +325,26 @@ async def on_voice_state_update(member, before, after):
                 await dm_channel.send(f"An error occured while creating temporary channel: {e}")
             except Exception as dm_error:
                 logger.warning(f"Error sending a dm from on_voice_status_update for member {member.id}: {dm_error}; temp channel error: {e}")
-    if (
-        (before.channel and before.channel.id in temp_channels)
-    ):
-        if temp_channels[before.channel.id]["created_at"] + timedelta(seconds=5) > datetime.now(timezone.utc):
+    if (before.channel and before.channel.id in temp_channels):
+        if temp_channels[before.channel.id]["created_at"] + timedelta(seconds=1) > datetime.now(timezone.utc):
             return
         if len(before.channel.members) == 0:
             try:
                 await before.channel.delete(reason="Last user left temporary channel")
+                # temp_channels.pop(before.channel.id, None)
             except Exception as delete_error:
-                logger.warning(
-                    f"Failed to delete temp channel {before.channel.id}: {delete_error}"
-                )
-            finally:
-                temp_channels.pop(before.channel.id, None)
+                logger.warning(f"Failed to delete temp channel {before.channel.id}: {delete_error}")
+            else:
+                if before.channel.guild.get_channel(before.channel.id) is None:
+                    temp_channels.pop(before.channel.id, None)
+                else:
+                    try:
+                        await bot.fetch_channel(before.channel.id)
+                        logger.warning(f"Channel {before.channel.id} still exists after delete attempt")
+                    except discord.errors.NotFound:
+                        temp_channels.pop(before.channel.id, None)
+                    except Exception:
+                        logger.exception(f"Unexpected exception during fetch in delete channel process")
 
 # @bot.event
 # async def on_message(message: discord.Message):
