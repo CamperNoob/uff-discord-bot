@@ -26,17 +26,26 @@ from gemini_wrapper import get_client, generate_response
 from google.genai.errors import ClientError
 from datetime import datetime, timedelta, timezone
 import pytz
+import json
 
 DISCORD_MAX_MESSAGE_LEN = 2000
+LOG_DIR = "logs"
+PERSIST_DIR = 'persist'
+LOGS_FILENAME = 'botlogger.log'
+TEMP_CHANNELS_PERSIST = 'temp_channels.json'
+
+LOGS_FILEPATH = os.path.join(LOG_DIR, LOGS_FILENAME)
+TEMP_CHANNELS_FILEPATH = os.path.join(PERSIST_DIR, TEMP_CHANNELS_PERSIST)
 
 logger = logging.getLogger("discord")
 logger.setLevel(logging.INFO)
 
-os.makedirs("logs", exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(PERSIST_DIR, exist_ok=True)
 
 # handler = logging.FileHandler(filename='botlogger.log', encoding='utf-8', mode='w')
 handler = TimedRotatingFileHandler(
-    filename='logs/botlogger.log',
+    filename=LOGS_FILEPATH,
     when="midnight",
     interval=1,
     backupCount=10,
@@ -64,6 +73,18 @@ daily_quota_timestamp = None
 hub_channel_ids = set(TempVoiceChannels)
 temp_channels = {}
 
+def load_temp_channels():
+    global temp_channels
+    try:
+        with open(TEMP_CHANNELS_FILEPATH, "r", encoding="utf-8") as f:
+            temp_channels = json.load(f)
+    except FileNotFoundError:
+        temp_channels = {}
+
+async def save_temp_channels():
+    with open(TEMP_CHANNELS_FILEPATH, "w") as f:
+        json.dump(temp_channels, f)
+
 async def send_with_fallback(interaction: discord.Interaction, *args, **kwargs):
     try:
         return await interaction.response.send_message(*args, **kwargs)
@@ -82,7 +103,6 @@ async def guild_chunk_with_timeout(guild: discord.guild, timeout=2):
     except Exception as e:
         logger.error(f"Guild chunk() failed: {e}")
         return False
-
 
 def seconds_until(target_time):
     now = datetime.now()
@@ -251,40 +271,48 @@ async def on_ready():
         logger.info(f"Initialized gemini client successfully")
     except Exception as e:
         logger.error(f"Failed to get a client for gemini: {e}; traceback: {traceback.format_exc()}")
+    load_temp_channels()
+    logger.info(f"Loaded temp_channels: {temp_channels}")
 
 # Temp Voice Channels
 @bot.event
 async def on_voice_state_update(member, before, after):
+    # logger.info(f"On_voice triggered. temp_channels = {temp_channels}; member = {member.id if member else None} ({member.display_name if member else None}); before = {before.channel.id if before.channel else None}; after = {after.channel.id if after.channel else None}")
     after_id = after.channel.id if after.channel else None
     guild = member.guild
 
     if temp_channels:
         to_delete = []
         for channel_id, info in temp_channels.items():
-            if (info["created_at"] + timedelta(seconds = 5)) > datetime.now(timezone.utc):
+            if (datetime.fromisoformat(info["created_at"]) + timedelta(seconds = 5)) > datetime.now(timezone.utc):
                 continue
             channel = guild.get_channel(channel_id)
             if channel is None:
-                to_delete.append(channel_id)
+                to_delete.append((channel_id, info))
                 continue
             if len(channel.members) == 0:
-                to_delete.append(channel_id)
-        for channel_id in to_delete:
+                to_delete.append((channel_id, info))
+        for channel_id, info in to_delete:
             channel = guild.get_channel(channel_id)
             try:
                 if channel:
+                    logger.info(f"Temp voice channel cleanup for {channel.id}:{channel.name}")
                     await channel.delete(reason="Temporary voice channel cleanup")
             except Exception as delete_error:
                 logger.warning(f"Failed to delete temp channel {channel_id}: {delete_error}")
             else:
                 if guild.get_channel(channel_id) is None:
+                    logger.info(f"Removed channel from temp_channels: {channel_id}:{info}")
                     temp_channels.pop(channel_id, None)
+                    await save_temp_channels()
                 else:
                     try:
                         await bot.fetch_channel(channel_id)
                         logger.warning(f"Channel {channel_id} still exists after delete attempt")
                     except discord.errors.NotFound:
+                        logger.info(f"Removed channel from temp_channels after fetch: {channel_id}:{info}")
                         temp_channels.pop(channel_id, None)
+                        await save_temp_channels()
                     except Exception:
                         logger.exception(f"Unexpected exception during fetch in delete channel process")
 
@@ -305,8 +333,11 @@ async def on_voice_state_update(member, before, after):
                 overwrites=hub_channel.overwrites #,
                 #position=hub_channel.position + 1
             )
+            
+            logger.info(f"Created temp_channel: {temp_channel.id}:{temp_channel.name}")
 
-            temp_channels[temp_channel.id] = {"owner":member.id, "created_at":datetime.now(timezone.utc)}
+            temp_channels[temp_channel.id] = {"owner":member.id, "created_at":datetime.now(timezone.utc).isoformat()}
+            await save_temp_channels()
 
             overwrite = temp_channel.overwrites_for(member)
             overwrite.move_members = True
@@ -326,23 +357,26 @@ async def on_voice_state_update(member, before, after):
             except Exception as dm_error:
                 logger.warning(f"Error sending a dm from on_voice_status_update for member {member.id}: {dm_error}; temp channel error: {e}")
     if (before.channel and before.channel.id in temp_channels):
-        if temp_channels[before.channel.id]["created_at"] + timedelta(seconds=1) > datetime.now(timezone.utc):
+        if datetime.fromisoformat(temp_channels[before.channel.id]["created_at"]) + timedelta(seconds=1) > datetime.now(timezone.utc):
             return
         if len(before.channel.members) == 0:
             try:
                 await before.channel.delete(reason="Last user left temporary channel")
-                # temp_channels.pop(before.channel.id, None)
             except Exception as delete_error:
                 logger.warning(f"Failed to delete temp channel {before.channel.id}: {delete_error}")
             else:
                 if before.channel.guild.get_channel(before.channel.id) is None:
+                    logger.info(f"Removed channel from temp_channels after last user: {before.channel.id}:{before.channel.name}")
                     temp_channels.pop(before.channel.id, None)
+                    await save_temp_channels()
                 else:
                     try:
                         await bot.fetch_channel(before.channel.id)
                         logger.warning(f"Channel {before.channel.id} still exists after delete attempt")
                     except discord.errors.NotFound:
+                        logger.info(f"Removed channel from temp_channels after last user fetch: {before.channel.id}:{before.channel.name}")
                         temp_channels.pop(before.channel.id, None)
+                        await save_temp_channels()
                     except Exception:
                         logger.exception(f"Unexpected exception during fetch in delete channel process")
 
