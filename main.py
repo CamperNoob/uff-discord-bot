@@ -277,6 +277,10 @@ async def on_ready():
 # Temp Voice Channels
 @bot.event
 async def on_voice_state_update(member, before, after):
+    # ignore events if bot is not fully up after restart, may cause delays on the function usage, but prevents inconsistent behavior and unexpected exceptions
+    if not bot.is_ready():
+        logger.info(f"On voice event was ignored, because the bot was not ready")
+        return
     # logger.info(f"On_voice triggered. temp_channels = {temp_channels}; member = {member.id if member else None} ({member.display_name if member else None}); before = {before.channel.id if before.channel else None}; after = {after.channel.id if after.channel else None}")
     after_id = after.channel.id if after.channel else None
     guild = member.guild
@@ -286,35 +290,35 @@ async def on_voice_state_update(member, before, after):
         for channel_id, info in temp_channels.items():
             if (datetime.fromisoformat(info["created_at"]) + timedelta(seconds = 5)) > datetime.now(timezone.utc):
                 continue
-            channel = guild.get_channel(channel_id)
-            if channel is None:
-                to_delete.append((channel_id, info))
-                continue
-            if len(channel.members) == 0:
-                to_delete.append((channel_id, info))
-        for channel_id, info in to_delete:
-            channel = guild.get_channel(channel_id)
             try:
-                if channel:
-                    logger.info(f"Temp voice channel cleanup for {channel.id}:{channel.name}")
-                    await channel.delete(reason="Temporary voice channel cleanup")
-            except Exception as delete_error:
-                logger.warning(f"Failed to delete temp channel {channel_id}: {delete_error}")
+                channel = await bot.fetch_channel(channel_id)
+            except discord.NotFound:
+                to_delete.append((channel_id, info))
+            except Exception:
+                logger.exception(f"Unexpected error fetching channel {channel_id}, info: {info}")
             else:
-                if guild.get_channel(channel_id) is None:
-                    logger.info(f"Removed channel from temp_channels: {channel_id}:{info}")
-                    temp_channels.pop(channel_id, None)
-                    await save_temp_channels()
-                else:
-                    try:
-                        await bot.fetch_channel(channel_id)
-                        logger.warning(f"Channel {channel_id} still exists after delete attempt")
-                    except discord.errors.NotFound:
-                        logger.info(f"Removed channel from temp_channels after fetch: {channel_id}:{info}")
-                        temp_channels.pop(channel_id, None)
-                        await save_temp_channels()
-                    except Exception:
-                        logger.exception(f"Unexpected exception during fetch in delete channel process")
+                if len(channel.members) == 0:
+                    to_delete.append((channel_id, info))
+        for channel_id, info in to_delete:
+            try:
+                channel = await bot.fetch_channel(channel_id)
+            except discord.NotFound:
+                logger.info(f"Removed channel from temp_channels: {channel_id}:{info}")
+                temp_channels.pop(channel_id, None)
+                await save_temp_channels()
+            except Exception:
+                logger.warning(f"Unexpected error getting channel {channel_id}:{info}")
+            else:
+                try:
+                    await channel.delete(reason="Temporary voice channel cleanup")   
+                    logger.info(f"Temp voice channel cleanup for {channel.id}:{channel.name}")               
+                except Exception as delete_error:
+                    logger.warning(f"Failed to delete temp channel {channel_id}: {delete_error}")
+                # this is commented, because it's better to leave the temp_channel pop be performed by the next event trigger. If the channel is truly deleted - it will remove the record, if not - will try deleting again
+                # else:
+                #     logger.info(f"Removed channel from temp_channels: {channel_id}:{info}")
+                #     temp_channels.pop(channel_id, None)
+                #     await save_temp_channels()
 
     if (after_id is not None and after_id in hub_channel_ids):
         try:
@@ -356,29 +360,32 @@ async def on_voice_state_update(member, before, after):
                 await dm_channel.send(f"An error occured while creating temporary channel: {e}")
             except Exception as dm_error:
                 logger.warning(f"Error sending a dm from on_voice_status_update for member {member.id}: {dm_error}; temp channel error: {e}")
+
     if (before.channel and before.channel.id in temp_channels):
         if datetime.fromisoformat(temp_channels[before.channel.id]["created_at"]) + timedelta(seconds=1) > datetime.now(timezone.utc):
             return
         if len(before.channel.members) == 0:
             try:
                 await before.channel.delete(reason="Last user left temporary channel")
+                logger.info(f"Last user left temp channel, deleted {before.channel.id}:{before.channel.name}") 
             except Exception as delete_error:
-                logger.warning(f"Failed to delete temp channel {before.channel.id}: {delete_error}")
-            else:
-                if before.channel.guild.get_channel(before.channel.id) is None:
-                    logger.info(f"Removed channel from temp_channels after last user: {before.channel.id}:{before.channel.name}")
-                    temp_channels.pop(before.channel.id, None)
-                    await save_temp_channels()
-                else:
-                    try:
-                        await bot.fetch_channel(before.channel.id)
-                        logger.warning(f"Channel {before.channel.id} still exists after delete attempt")
-                    except discord.errors.NotFound:
-                        logger.info(f"Removed channel from temp_channels after last user fetch: {before.channel.id}:{before.channel.name}")
-                        temp_channels.pop(before.channel.id, None)
-                        await save_temp_channels()
-                    except Exception:
-                        logger.exception(f"Unexpected exception during fetch in delete channel process")
+                logger.warning(f"Unexpectedly failed to delete temp channel {before.channel.id}: {delete_error}")
+            # also commented, because it is better to handle records for unexisting channels separately to double check if they were deleted properly
+            # else:
+            #     if before.channel.guild.get_channel(before.channel.id) is None:
+            #         logger.info(f"Removed channel from temp_channels after last user: {before.channel.id}:{before.channel.name}")
+            #         temp_channels.pop(before.channel.id, None)
+            #         await save_temp_channels()
+            #     else:
+            #         try:
+            #             await bot.fetch_channel(before.channel.id)
+            #             logger.warning(f"Channel {before.channel.id} still exists after delete attempt")
+            #         except discord.errors.NotFound:
+            #             logger.info(f"Removed channel from temp_channels after last user fetch: {before.channel.id}:{before.channel.name}")
+            #             temp_channels.pop(before.channel.id, None)
+            #             await save_temp_channels()
+            #         except Exception:
+            #             logger.exception(f"Unexpected exception during fetch in delete channel process")
 
 # @bot.event
 # async def on_message(message: discord.Message):
