@@ -19,6 +19,7 @@ from configs.tokens import ApolloID as apollo_id
 from configs.seeding_messages_config import autopost_conf
 from configs.perms import unpack_conf, unpack_matching_conf, unpack_matching, strict_has_any_role
 from configs.gifs_command import get_gifs
+from configs.timestamp_generator_lookup import get_timezones, get_formats, get_format_from_key, get_timezone_from_key
 from translations.ua import *
 import csv
 import io
@@ -1736,7 +1737,7 @@ async def copy_role(interaction: discord.Interaction, role_from: discord.Role, r
                         error_list.append(f"{COPY_ROLE_ERROR_CHANNEL} '{category.name}': {e}")
         errors_string = COPY_ROLE_NO_ERRORS if not error_list else f"{COPY_ROLE_WITH_ERRORS}{'\n'.join(error_list)}"
         await send_with_fallback(interaction, COPY_ROLE_SUCCESS.format(role_from=role_from.mention, new_role=new_role.mention, errors=errors_string), ephemeral=True)
-    except discord.errors.Forbidden:
+    except discord.errors.Forbidden as e:
         await send_with_fallback(interaction, f"{COPY_ROLE_ERROR_NO_PERM_ROLE_MANAGE}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {role_from.name}, {role_to};")
     except Exception as e:
@@ -1761,7 +1762,7 @@ async def copy_category(interaction: discord.Interaction, category_from: discord
             overwrites[target] = perms
         new_category = await interaction.guild.create_category(name=category_to, overwrites=overwrites)
         await send_with_fallback(interaction, COPY_CATEGORY_SUCCESS.format(category_from=category_from.name, category_to=new_category.name), ephemeral=True)
-    except discord.errors.Forbidden:
+    except discord.errors.Forbidden as e:
         await send_with_fallback(interaction, f"{COPY_CATEGORY_ERROR_NO_PERM}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to};")
     except Exception as e:
@@ -1789,10 +1790,10 @@ async def echo(interaction: discord.Interaction, what: str, where: discord.TextC
     try:
         await where.send(what)
         await send_with_fallback(interaction, f"{ECHO_DONE}.", ephemeral=True)
-    except discord.errors.Forbidden:
+    except discord.errors.Forbidden as e:
         await send_with_fallback(interaction, f"{GIF_ARCHIVE_BOT_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {what}, {where.name};")
-    except commands.MissingAnyRole:
+    except commands.MissingAnyRole as e:
         await send_with_fallback(interaction, f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {what}, {where.name};")
     except Exception as e:
@@ -1813,15 +1814,89 @@ async def gif_archive(interaction: discord.Interaction, gif: str):
     logger.info(f"Received gif_archive: {gif}, from user: {interaction.user.name} <@{interaction.user.id}>")
     try:
         await send_with_fallback(interaction, f"{gif}", ephemeral=False)
-    except discord.errors.Forbidden:
+    except discord.errors.Forbidden as e:
         await send_with_fallback(interaction, f"{GIF_ARCHIVE_BOT_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {gif};")
-    except commands.MissingAnyRole:
+    except commands.MissingAnyRole as e:
         await send_with_fallback(interaction, f"{GIF_ARCHIVE_USER_NO_PERMISSIONS}.", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {gif};")
     except Exception as e:
         await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {gif}; traceback: {traceback.format_exc()}")
+    return
+
+@bot.tree.command(name="discord_timestamp", description=f"{DISCORD_TIMESTAMP_DESCRIPTION}.")
+@discord.app_commands.describe(
+    date=f"{DISCORD_TIMESTAMP_DATE}.", # yyyy-mm-dd format only
+    time=f"{DISCORD_TIMESTAMP_TIME}.", # 24h format or 12h format
+    timezone_offset=f"{DISCORD_TIMESTAMP_TIMEZONE}.",
+    format_key=f"{DISCORD_TIMESTAMP_FORMAT_KEY}.",
+    custom_message=f"{DISCORD_TIMESTAMP_CUSTOM_MESSAGE}" # any message to be placed before the generated result
+)
+@discord.app_commands.choices(
+    timezone_offset=get_timezones(),
+    format_key=get_formats()
+)
+@discord.app_commands.default_permissions()
+# @commands.guild_only()
+async def discord_timestamp(interaction: discord.Interaction, date: str, time: str, timezone_offset: int, format_key: str, custom_message: str = None):
+    logger.info(f"Received discord_timestamp: {date}, {time}, {timezone_offset}, {format_key} from user: {interaction.user.name} <@{interaction.user.id}>")
+    # check for correct date format
+    parsed_date = None
+    try:
+        parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT}.", ephemeral=True)
+        return
+    # check the time
+    try:
+        input_time = time.strip().upper()
+        match_time = re.fullmatch(
+            r"(?P<hours>\d{1,2}):(?P<minutes>\d{1,2})(:(?P<seconds>\d{1,2}))?\s*(?P<ampm>AM|PM)?",
+            input_time
+        )
+        if not match_time:
+            await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_TIME_INCORRECT_FORMAT}.", ephemeral=True)
+            return
+        h = int(match_time.group("hours"))
+        m = int(match_time.group("minutes"))
+        s = int(match_time.group("seconds")) if match_time.group("seconds") else 0
+        ampm = match_time.group("ampm")
+        if ampm and h <= 12:
+            # 12-hour format conversion
+            if h == 12:
+                h = 0
+            if ampm == "PM":
+                h += 12
+        if h == 24: # fallback in case
+            h = 0
+        if not (0 <= h <= 23) or not (0 <= m <= 59) or not (0 <= s <= 59):
+            await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_TIME_INCORRECT_FORMAT}.", ephemeral=True)
+            return
+        parsed_time = datetime.time(hour=h, minute=m, second=s)
+        tz = get_timezone_from_key(timezone_offset)
+        parsed_timestamp = datetime.combine(parsed_date, parsed_time).replace(tzinfo=tz)
+        timestamp_resolved = get_format_from_key(format_key)
+        if not timestamp_resolved:
+            raise ValueError(f"Failed to resolve timestamp format")
+        timestamp_resolved = timestamp_resolved.format(unixtimestamp=int(parsed_timestamp.timestamp()))
+    except Exception as e:
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {date}, {time}, {timezone_offset}, {format_key}; traceback: {traceback.format_exc()}")
+        return
+    try:
+        await send_with_fallback(interaction, f"{f'{custom_message} ' if custom_message else ''}{timestamp_resolved}.", ephemeral=False)
+    except discord.errors.Forbidden as e:
+        await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_BOT_NO_PERMISSIONS}.", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {date}, {time}, {timezone_offset}, {format_key};")
+        try:
+            dm_channel = await interaction.user.create_dm()
+            await dm_channel.send(f"{f'{custom_message} ' if custom_message else ''}{timestamp_resolved}.")
+        except Exception as dm_error:
+            logger.warning(f"Error sending a dm from on_voice_status_update for member {interaction.user.id}: {dm_error}; temp channel error: {e}")
+    except Exception as e:
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {date}, {time}, {timezone_offset}, {format_key}; traceback: {traceback.format_exc()}")
     return
 
 # @bot.tree.command(name="copy_perms", description=f"{COPY_CATEGORY_DESCRIPTION}.")
