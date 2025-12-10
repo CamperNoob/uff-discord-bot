@@ -180,7 +180,7 @@ ECHO_WHERE = "Канал, куди відправити"
 ECHO_DONE = "Відправлено"
 
 DISCORD_TIMESTAMP_DESCRIPTION = "Повертає час у форматі діскорду, який підлаштовується на локальний час користувача"
-DISCORD_TIMESTAMP_DATE = "Дата в РРРР-ММ-ДД форматі (2025-01-01) або Сьогодні"
+DISCORD_TIMESTAMP_DATE = "Дата в РРРР-ММ-ДД форматі (2025-01-01)"
 DISCORD_TIMESTAMP_TIME = "Час в 12 (11:00 AM) або 24 (23:00) форматі. Секунди опційні (11:00:00)"
 DISCORD_TIMESTAMP_TIMEZONE = "Часовий пояс дати"
 DISCORD_TIMESTAMP_FORMAT_KEY = "Форматування результату"

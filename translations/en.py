@@ -180,7 +180,7 @@ ECHO_WHERE = "Channel to send to"
 ECHO_DONE = "Done"
 
 DISCORD_TIMESTAMP_DESCRIPTION = "Returns a timestamp in discord format, which shows in local timezone of the user"
-DISCORD_TIMESTAMP_DATE = "Date in YYYY-MM-DD format (2025-01-01) or Today"
+DISCORD_TIMESTAMP_DATE = "Date in YYYY-MM-DD format (2025-01-01)"
 DISCORD_TIMESTAMP_TIME = "Time in 12 (11:00 AM) or 24 (23:00) hour format. Optional seconds part (11:00:00)"
 DISCORD_TIMESTAMP_TIMEZONE = "Timezone of the timestamp"
 DISCORD_TIMESTAMP_FORMAT_KEY = "Formatting of the resulting discord timestamp"
