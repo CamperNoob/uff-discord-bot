@@ -1824,6 +1824,22 @@ async def gif_archive(interaction: discord.Interaction, gif: str):
         logger.error(f"{ERROR_GENERIC}: {e}; args: {gif}; traceback: {traceback.format_exc()}")
     return
 
+async def date_val_autocomplete(interaction: discord.Interaction, value: str):
+    choices = [
+        f"{DISCORD_TIMESTAMP_TODAY}",
+        "2025-01-01"
+    ]
+    return [discord.app_commands.Choice(name=s, value=s) for s in choices if s.startswith(value)]
+
+async def time_val_autocomplete(interaction: discord.Interaction, value: str):
+    choices = [
+        "18:00",
+        "18:00:00",
+        "6:00 PM",
+        "06:00:00 PM"
+    ]
+    return [discord.app_commands.Choice(name=s, value=s) for s in choices if s.startswith(value)]
+
 @bot.tree.command(name="discord_timestamp", description=f"{DISCORD_TIMESTAMP_DESCRIPTION}.")
 @discord.app_commands.describe(
     date_val=f"{DISCORD_TIMESTAMP_DATE}.", # yyyy-mm-dd format only
@@ -1836,6 +1852,10 @@ async def gif_archive(interaction: discord.Interaction, gif: str):
     timezone_offset=get_timezones(),
     format_key=get_formats()
 )
+@discord.app_commands.autocomplete(
+    date_val=date_val_autocomplete,
+    time_val=time_val_autocomplete
+    )
 @discord.app_commands.default_permissions()
 # @commands.guild_only()
 async def discord_timestamp(interaction: discord.Interaction, date_val: str, time_val: str, timezone_offset: int, format_key: str, custom_message: str = None):
@@ -1843,9 +1863,18 @@ async def discord_timestamp(interaction: discord.Interaction, date_val: str, tim
     # check for correct date format
     parsed_date = None
     try:
-        parsed_date = datetime.strptime(date_val, "%Y-%m-%d").date()
-    except ValueError:
-        await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT}.", ephemeral=True)
+        if date_val.strip().lower() == DISCORD_TIMESTAMP_TODAY.strip().lower():
+            tz = get_timezone_from_key(timezone_offset)
+            parsed_date = datetime.now(tz=tz).date()
+        else:
+            try:
+                parsed_date = datetime.strptime(date_val, "%Y-%m-%d").date()
+            except ValueError:
+                await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT}.", ephemeral=True)
+                return
+    except Exception as e:
+        await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {date_val}, {time_val}, {timezone_offset}, {format_key}; traceback: {traceback.format_exc()}")
         return
     # check the time
     try:

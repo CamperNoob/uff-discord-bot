@@ -180,7 +180,7 @@ ECHO_WHERE = "Channel to send to"
 ECHO_DONE = "Done"
 
 DISCORD_TIMESTAMP_DESCRIPTION = "Returns a timestamp in discord format, which shows in local timezone of the user"
-DISCORD_TIMESTAMP_DATE = "Date in YYYY-MM-DD format (2025-01-01)"
+DISCORD_TIMESTAMP_DATE = "Date in YYYY-MM-DD format (2025-01-01) or Today"
 DISCORD_TIMESTAMP_TIME = "Time in 12 (11:00 AM) or 24 (23:00) hour format. Optional seconds part (11:00:00)"
 DISCORD_TIMESTAMP_TIMEZONE = "Timezone of the timestamp"
 DISCORD_TIMESTAMP_FORMAT_KEY = "Formatting of the resulting discord timestamp"
@@ -188,3 +188,4 @@ DISCORD_TIMESTAMP_CUSTOM_MESSAGE = "Optional text to include before resulting ti
 DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT = f"{ERROR_GENERIC}: Wrong data format. Right format: 2025-12-12"
 DISCORD_TIMESTAMP_TIME_INCORRECT_FORMAT = f"{ERROR_GENERIC}: Wrong time format. Right format: 23:00:00, or 11:00:00 AM. Seconds - optional"
 DISCORD_TIMESTAMP_BOT_NO_PERMISSIONS = f"{ERROR_NO_PERMISSION} to write in this channel. Result was sent in private messages and can be copied from there"
+DISCORD_TIMESTAMP_TODAY = "Today"
