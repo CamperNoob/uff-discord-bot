@@ -1807,7 +1807,7 @@ async def echo(interaction: discord.Interaction, what: str, where: discord.TextC
 @discord.app_commands.choices(
     gif=get_gifs()
 )
-@discord.app_commands.default_permissions()
+# @discord.app_commands.default_permissions()
 @commands.guild_only()
 async def gif_archive(interaction: discord.Interaction, gif: str):
     logger.info(f"Received gif_archive: {gif}, from user: {interaction.user.name} <@{interaction.user.id}>")
@@ -1859,7 +1859,7 @@ async def time_val_autocomplete(interaction: discord.Interaction, value: str):
     date_val=date_val_autocomplete,
     time_val=time_val_autocomplete
     )
-@discord.app_commands.default_permissions()
+# @discord.app_commands.default_permissions()
 # @commands.guild_only()
 async def discord_timestamp(interaction: discord.Interaction, date_val: str, time_val: str, timezone_offset: int, format_key: str, custom_message: str = None):
     logger.info(f"Received discord_timestamp: {date_val}, {time_val}, {timezone_offset}, {format_key} from user: {interaction.user.name} <@{interaction.user.id}>")
