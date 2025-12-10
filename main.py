@@ -1863,6 +1863,10 @@ async def time_val_autocomplete(interaction: discord.Interaction, value: str):
 # @commands.guild_only()
 async def discord_timestamp(interaction: discord.Interaction, date_val: str, time_val: str, timezone_offset: int, format_key: str, custom_message: str = None):
     logger.info(f"Received discord_timestamp: {date_val}, {time_val}, {timezone_offset}, {format_key} from user: {interaction.user.name} <@{interaction.user.id}>")
+    # replace everyone and here in custom_message
+    if custom_message:
+        custom_message = custom_message.replace("@everyone", "@everyоne") # replace o with cyrillic to avoid everyone tag
+        custom_message = custom_message.replace("@here", "@hеre") # replace e with cyrillic to avoid everyone tag
     # check for correct date format
     parsed_date = None
     try:
