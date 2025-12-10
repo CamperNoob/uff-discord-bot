@@ -188,4 +188,3 @@ DISCORD_TIMESTAMP_CUSTOM_MESSAGE = "Optional text to include before resulting ti
 DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT = f"{ERROR_GENERIC}: Wrong data format. Right format: 2025-12-12"
 DISCORD_TIMESTAMP_TIME_INCORRECT_FORMAT = f"{ERROR_GENERIC}: Wrong time format. Right format: 23:00:00, or 11:00:00 AM. Seconds - optional"
 DISCORD_TIMESTAMP_BOT_NO_PERMISSIONS = f"{ERROR_NO_PERMISSION} to write in this channel. Result was sent in private messages and can be copied from there"
-DISCORD_TIMESTAMP_TODAY = "Today"

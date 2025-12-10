@@ -1825,18 +1825,21 @@ async def gif_archive(interaction: discord.Interaction, gif: str):
     return
 
 async def date_val_autocomplete(interaction: discord.Interaction, value: str):
+    now = datetime.now().date()
     choices = [
-        f"{DISCORD_TIMESTAMP_TODAY}",
-        "2025-01-01"
+        (now).strftime('%Y-%m-%d'),
+        (now + timedelta(days=1)).strftime('%Y-%m-%d'),
+        (now + timedelta(days=2)).strftime('%Y-%m-%d'),
     ]
     return [discord.app_commands.Choice(name=s, value=s) for s in choices if s.startswith(value)]
 
 async def time_val_autocomplete(interaction: discord.Interaction, value: str):
+    now = datetime.now()
     choices = [
-        "18:00",
-        "18:00:00",
-        "6:00 PM",
-        "06:00:00 PM"
+        (now.strftime("%H:%M")),
+        (now.strftime("%H:%M:%S")),
+        (now.strftime("%I:%M %p")),
+        (now.strftime("%I:%M:%S %p"))
     ]
     return [discord.app_commands.Choice(name=s, value=s) for s in choices if s.startswith(value)]
 
@@ -1863,15 +1866,10 @@ async def discord_timestamp(interaction: discord.Interaction, date_val: str, tim
     # check for correct date format
     parsed_date = None
     try:
-        if date_val.strip().lower() == DISCORD_TIMESTAMP_TODAY.strip().lower():
-            tz = get_timezone_from_key(timezone_offset)
-            parsed_date = datetime.now(tz=tz).date()
-        else:
-            try:
-                parsed_date = datetime.strptime(date_val, "%Y-%m-%d").date()
-            except ValueError:
-                await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT}.", ephemeral=True)
-                return
+        parsed_date = datetime.strptime(date_val, "%Y-%m-%d").date()
+    except ValueError:
+        await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT}.", ephemeral=True)
+        return
     except Exception as e:
         await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
         logger.error(f"{ERROR_GENERIC}: {e}; args: {date_val}, {time_val}, {timezone_offset}, {format_key}; traceback: {traceback.format_exc()}")
