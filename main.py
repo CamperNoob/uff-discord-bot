@@ -25,7 +25,6 @@ import csv
 import io
 from gemini_wrapper import get_client, generate_response
 from google.genai.errors import ClientError
-from datetime import datetime, timedelta, timezone
 import pytz
 import json
 
@@ -1827,8 +1826,8 @@ async def gif_archive(interaction: discord.Interaction, gif: str):
 
 @bot.tree.command(name="discord_timestamp", description=f"{DISCORD_TIMESTAMP_DESCRIPTION}.")
 @discord.app_commands.describe(
-    date=f"{DISCORD_TIMESTAMP_DATE}.", # yyyy-mm-dd format only
-    time=f"{DISCORD_TIMESTAMP_TIME}.", # 24h format or 12h format
+    date_val=f"{DISCORD_TIMESTAMP_DATE}.", # yyyy-mm-dd format only
+    time_val=f"{DISCORD_TIMESTAMP_TIME}.", # 24h format or 12h format
     timezone_offset=f"{DISCORD_TIMESTAMP_TIMEZONE}.",
     format_key=f"{DISCORD_TIMESTAMP_FORMAT_KEY}.",
     custom_message=f"{DISCORD_TIMESTAMP_CUSTOM_MESSAGE}" # any message to be placed before the generated result
@@ -1839,18 +1838,18 @@ async def gif_archive(interaction: discord.Interaction, gif: str):
 )
 @discord.app_commands.default_permissions()
 # @commands.guild_only()
-async def discord_timestamp(interaction: discord.Interaction, date: str, time: str, timezone_offset: int, format_key: str, custom_message: str = None):
-    logger.info(f"Received discord_timestamp: {date}, {time}, {timezone_offset}, {format_key} from user: {interaction.user.name} <@{interaction.user.id}>")
+async def discord_timestamp(interaction: discord.Interaction, date_val: str, time_val: str, timezone_offset: int, format_key: str, custom_message: str = None):
+    logger.info(f"Received discord_timestamp: {date_val}, {time_val}, {timezone_offset}, {format_key} from user: {interaction.user.name} <@{interaction.user.id}>")
     # check for correct date format
     parsed_date = None
     try:
-        parsed_date = datetime.strptime(date, "%Y-%m-%d").date()
+        parsed_date = datetime.strptime(date_val, "%Y-%m-%d").date()
     except ValueError:
         await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT}.", ephemeral=True)
         return
     # check the time
     try:
-        input_time = time.strip().upper()
+        input_time = time_val.strip().upper()
         match_time = re.fullmatch(
             r"(?P<hours>\d{1,2}):(?P<minutes>\d{1,2})(:(?P<seconds>\d{1,2}))?\s*(?P<ampm>AM|PM)?",
             input_time
@@ -1873,7 +1872,7 @@ async def discord_timestamp(interaction: discord.Interaction, date: str, time: s
         if not (0 <= h <= 23) or not (0 <= m <= 59) or not (0 <= s <= 59):
             await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_TIME_INCORRECT_FORMAT}.", ephemeral=True)
             return
-        parsed_time = datetime.time(hour=h, minute=m, second=s)
+        parsed_time = time(hour=h, minute=m, second=s)
         tz = get_timezone_from_key(timezone_offset)
         parsed_timestamp = datetime.combine(parsed_date, parsed_time).replace(tzinfo=tz)
         timestamp_resolved = get_format_from_key(format_key)
@@ -1882,13 +1881,13 @@ async def discord_timestamp(interaction: discord.Interaction, date: str, time: s
         timestamp_resolved = timestamp_resolved.format(unixtimestamp=int(parsed_timestamp.timestamp()))
     except Exception as e:
         await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.error(f"{ERROR_GENERIC}: {e}; args: {date}, {time}, {timezone_offset}, {format_key}; traceback: {traceback.format_exc()}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {date_val}, {time_val}, {timezone_offset}, {format_key}; traceback: {traceback.format_exc()}")
         return
     try:
         await send_with_fallback(interaction, f"{f'{custom_message} ' if custom_message else ''}{timestamp_resolved}.", ephemeral=False)
     except discord.errors.Forbidden as e:
         await send_with_fallback(interaction, f"{DISCORD_TIMESTAMP_BOT_NO_PERMISSIONS}.", ephemeral=True)
-        logger.error(f"{ERROR_GENERIC}: {e}; args: {date}, {time}, {timezone_offset}, {format_key};")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {date_val}, {time_val}, {timezone_offset}, {format_key};")
         try:
             dm_channel = await interaction.user.create_dm()
             await dm_channel.send(f"{f'{custom_message} ' if custom_message else ''}{timestamp_resolved}.")
@@ -1896,7 +1895,7 @@ async def discord_timestamp(interaction: discord.Interaction, date: str, time: s
             logger.warning(f"Error sending a dm from on_voice_status_update for member {interaction.user.id}: {dm_error}; temp channel error: {e}")
     except Exception as e:
         await send_with_fallback(interaction, f"{ERROR_GENERIC}: {e}", ephemeral=True)
-        logger.error(f"{ERROR_GENERIC}: {e}; args: {date}, {time}, {timezone_offset}, {format_key}; traceback: {traceback.format_exc()}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {date_val}, {time_val}, {timezone_offset}, {format_key}; traceback: {traceback.format_exc()}")
     return
 
 # @bot.tree.command(name="copy_perms", description=f"{COPY_CATEGORY_DESCRIPTION}.")
