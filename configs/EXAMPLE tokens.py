@@ -35,3 +35,13 @@ GeminiAPIInstruction = [
 TempVoiceChannels = [   # Voice channels which act as a hub for temporary voices
     1234567890
 ]
+amp_api_token = {
+    "url": "https://127.0.0.1:8080",
+    "user": "admin",
+    "password": "admin"
+}
+
+amp_allowed_reboot_instances = [
+    {"InstanceName": "Server01"},
+    {"InstanceName": "Server02"},  
+]

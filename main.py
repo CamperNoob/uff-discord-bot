@@ -27,6 +27,7 @@ from gemini_wrapper import get_client, generate_response
 from google.genai.errors import ClientError
 import pytz
 import json
+from configs.amp_api_helper import get_amp_servers, send_reboot_server
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 LOG_DIR = "logs"
@@ -1957,5 +1958,34 @@ async def discord_timestamp(interaction: discord.Interaction, date_val: str, tim
 #         await interaction.response.send_message(f"{ERROR_GENERIC}: {e}", ephemeral=True)
 #         logger.error(f"{ERROR_GENERIC}: {e}; args: {category_from.name}, {category_to}; traceback: {traceback.format_exc()}")
 #     return
+
+@bot.tree.command(name="reboot_server", description=f"{REBOOT_SERVER_DESCRIPTION}.")
+@discord.app_commands.describe(
+    server=f"{REBOOT_SERVER_SERVER}."
+)
+@discord.app_commands.autocomplete(
+    server=get_amp_servers
+)
+@strict_has_any_role(*unpack_conf())
+@commands.guild_only()
+async def reboot_server(interaction: discord.Interaction, server: str):
+    logger.info(f"Received reboot_server: {server} from user: {interaction.user.name} <@{interaction.user.id}>")
+    try:
+        await interaction.response.send_message(f"{REBOOT_SERVER_DEFER}{discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=True)
+        is_success, exception, friendly_name = await send_reboot_server(server)
+        if not is_success:
+            if isinstance(exception, InterruptedError):
+                await interaction.edit_original_response(content=f"{REBOOT_SERVER_ERROR_NOT_EMPTY}")
+            elif isinstance(exception, ValueError):
+                await interaction.edit_original_response(content=f"{REBOOT_SERVER_ERROR_NOT_FOUND}")
+            else:
+                raise exception
+        else:
+            await interaction.delete_original_response()
+            await send_with_fallback(interaction, f"{REBOOT_SERVER_SUCCESS} {friendly_name}")
+    except Exception as e:
+        await interaction.edit_original_response(content=f"{ERROR_GENERIC}: {e}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {server}; traceback: {traceback.format_exc()}")
+    return
 
 bot.run(DiscordToken, log_handler=handler, log_level=logging.INFO)

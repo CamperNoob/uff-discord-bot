@@ -188,3 +188,10 @@ DISCORD_TIMESTAMP_CUSTOM_MESSAGE = "Optional text to include before resulting ti
 DISCORD_TIMESTAMP_DATE_INCORRECT_FORMAT = f"{ERROR_GENERIC}: Wrong data format. Right format: 2025-12-12"
 DISCORD_TIMESTAMP_TIME_INCORRECT_FORMAT = f"{ERROR_GENERIC}: Wrong time format. Right format: 23:00:00, or 11:00:00 AM. Seconds - optional"
 DISCORD_TIMESTAMP_BOT_NO_PERMISSIONS = f"{ERROR_NO_PERMISSION} to write in this channel. Result was sent in private messages and can be copied from there"
+
+REBOOT_SERVER_DESCRIPTION = "Reboots gaming server from allowed list in bot config"
+REBOOT_SERVER_SERVER = "Target server to reboot"
+REBOOT_SERVER_DEFER = "Trying to reboot server"
+REBOOT_SERVER_ERROR_NOT_EMPTY = f"{ERROR_GENERIC}: Server is not empty, please try again later, when all users will leave the server"
+REBOOT_SERVER_ERROR_NOT_FOUND = f"{ERROR_GENERIC}: Server not found, please use the values from autocomplete"
+REBOOT_SERVER_SUCCESS = "Successfully sent reboot request to the server"
