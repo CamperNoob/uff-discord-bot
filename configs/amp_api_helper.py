@@ -53,7 +53,13 @@ async def send_reboot_server(instance_name: str) -> Tuple[bool, Exception | None
 
     try:
         instance = API_INSTANCE_CACHE[instance_name]["instance"]
-        await instance.restart_instance()
+        if instance.app_state == amp.enums.AMPInstanceState.stopped:
+            await instance.start_application()
+        elif instance.app_state == amp.enums.AMPInstanceState.restarting or instance.app_state == amp.enums.AMPInstanceState.starting:
+            return False, BufferError(f"Error: server is already starting/restarting. Try again later."), API_INSTANCE_CACHE[instance_name]["friendly_name"]
+        else:
+            await instance.restart_application()
+            
     except Exception as e:
         return False, e, None
     else:

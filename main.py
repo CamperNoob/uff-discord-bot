@@ -688,7 +688,7 @@ async def missing_mentions(ctx: discord.Interaction, role: discord.Role, message
             return
         event_mentions = []
         # await ctx.guild.chunk()
-        guild_chunk_with_timeout(ctx.guild)
+        await guild_chunk_with_timeout(ctx.guild)
         role_members = set(member.id for member in role.members)
         if role2:
             role_members |= set(member.id for member in role2.members)
@@ -744,7 +744,7 @@ async def missing_voice(ctx: discord.Interaction,  voice_name: str, message_link
                 await send_with_fallback(ctx, f"{ERROR_MESSAGE_LINK_CANNOT_BE_RESOLVED} {MISSING_VOICE_CANNOT_FIND_MESSAGE}.", ephemeral=True)
                 return
         # await ctx.guild.chunk()
-        guild_chunk_with_timeout(ctx.guild)
+        await guild_chunk_with_timeout(ctx.guild)
         voice_channel_names = {vc.name.lower().replace(' ', '_'):vc.name for vc in ctx.guild.voice_channels}
         matches = difflib.get_close_matches(voice_name.lower().replace(' ', '_'), voice_channel_names.keys(), n=3, cutoff=0.5)
         if not matches:
@@ -837,7 +837,7 @@ async def generate_roster(ctx: discord.Interaction, message_link: str):
     }
     try:
         # await guild.chunk()
-        guild_chunk_with_timeout(guild)
+        await guild_chunk_with_timeout(guild)
         message = await fetch_message_from_url(ctx, message_link)
         guild_discord_members = guild.members
         guild_members = {member.name.lower():member.id for member in guild_discord_members if member.name is not None}
@@ -1978,6 +1978,8 @@ async def reboot_server(interaction: discord.Interaction, server: str):
                 await interaction.edit_original_response(content=f"{REBOOT_SERVER_ERROR_NOT_EMPTY}")
             elif isinstance(exception, ValueError):
                 await interaction.edit_original_response(content=f"{REBOOT_SERVER_ERROR_NOT_FOUND}")
+            elif isinstance(exception, BufferError):
+                await interaction.edit_original_response(content=f"{REBOOT_SERVER_ERROR_IN_PROGRESS}")
             else:
                 raise exception
         else:
