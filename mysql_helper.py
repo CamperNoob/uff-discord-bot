@@ -63,7 +63,7 @@ def get_db_connection():
     )
 
 class GeminiMySqlConnectionManager:
-    def __init__(self, logger: logging.logger):
+    def __init__(self, logger: logging.Logger):
         self.logger = logger
 
     def conn_server(self, autocommit: bool = False, db_name: str = GEMINI_DB_NAME):
