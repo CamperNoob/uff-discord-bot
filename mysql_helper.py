@@ -95,7 +95,7 @@ class GeminiMySqlConnectionManager:
                     FROM information_schema.tables
                     WHERE table_schema = DATABASE()
                     AND table_name = '{name}'
-                )
+                ) as table_exists
             """.format(name=table_name))
             result = cursor.fetchone()
             return result["table_exists"]
