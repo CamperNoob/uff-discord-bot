@@ -3,7 +3,6 @@ import asyncio
 import random
 import logging
 import os
-import pymysql.cursors
 import difflib
 import traceback
 import pymysql
@@ -14,7 +13,7 @@ from discord.ext import commands, tasks
 from logging.handlers import TimedRotatingFileHandler
 from collections import defaultdict
 from datetime import datetime, time, timedelta, timezone
-from configs.tokens import DiscordToken, MySQL, Grafana, Servers, TempVoiceChannels
+from configs.tokens import DiscordToken, Grafana, Servers, TempVoiceChannels
 from configs.tokens import ApolloID as apollo_id
 from configs.seeding_messages_config import autopost_conf
 from configs.perms import unpack_conf, unpack_matching_conf, unpack_matching, strict_has_any_role
@@ -24,6 +23,7 @@ from translations.ua import *
 import csv
 import io
 from gemini_wrapper import get_client, generate_response
+from mysql_helper import get_db_connection, GeminiMySqlConnectionManager
 from google.genai.errors import ClientError
 import pytz
 import json
@@ -40,6 +40,8 @@ TEMP_CHANNELS_FILEPATH = os.path.join(PERSIST_DIR, TEMP_CHANNELS_PERSIST)
 
 logger = logging.getLogger("discord")
 logger.setLevel(logging.INFO)
+
+gemini_cleaner_mysql = GeminiMySqlConnectionManager(logger)
 
 os.makedirs(LOG_DIR, exist_ok=True)
 os.makedirs(PERSIST_DIR, exist_ok=True)
@@ -111,16 +113,6 @@ def seconds_until(target_time):
     if now > target:
         target += timedelta(days=1)
     return (target - now).total_seconds()
-
-def get_db_connection():
-    return pymysql.connect(
-        host=MySQL.get("host"),
-        port=MySQL.get("port", 3306),
-        user=MySQL.get("user"),
-        password=MySQL.get("password"),
-        database=MySQL.get("database"),
-        cursorclass=pymysql.cursors.DictCursor
-    )
 
 class missingVoiceChannelSelectView(discord.ui.View):
     def __init__(self, matches, voice_channel_names, ctx, message_link):
@@ -272,6 +264,13 @@ async def on_ready():
         logger.info(f"Initialized gemini client successfully")
     except Exception as e:
         logger.error(f"Failed to get a client for gemini: {e}; traceback: {traceback.format_exc()}")
+    try:
+        if not clean_temp_instructions.is_running():
+            await before_clean_temp_instructions()
+            clean_temp_instructions.start()
+    except:
+        logger.exception(f'Failed to initialize auto instruction clear')
+
     load_temp_channels()
     logger.info(f"Loaded temp_channels: {temp_channels}")
 
@@ -522,14 +521,6 @@ async def on_message(message: discord.Message):
         else:
             user_input = "Hi!"
 
-    prompt = f'''
-    {{
-        "Context": {context_text},
-        "User info": {user_info},
-        "User message": "{user_input}"
-    }}
-    '''
-
     # Send initial "thinking" message
     try:
         thinking_msg = await message.reply(f"FRS Bot думає{discord.utils.get(bot.emojis, name='loading') or '...'}", mention_author=False)
@@ -543,9 +534,8 @@ async def on_message(message: discord.Message):
         pst = pytz.timezone("US/Pacific")
         now_pst = datetime.now(pst)
         if (not daily_quota_timestamp or daily_quota_timestamp < now_pst):
-            response = await generate_response(gemini, prompt) #, image_urls=image_urls, image_bytes=image_bytes_list)
-            response_text = response.text.removeprefix('FRS Bot: ')
-            await thinking_msg.edit(content=response_text)
+            response = await generate_response(gemini, context_text, user_info, user_input) #, image_urls=image_urls, image_bytes=image_bytes_list)
+            await thinking_msg.edit(content=response)
         else:
             logger.warning(f"Quota exceeded for the current day, skipping sending the request.")
             await thinking_msg.edit(content=f"❌Помилка генерації відповіді. Квота перевищена, спробуйте <t:{int(daily_quota_timestamp.timestamp())}:R>.")
@@ -656,6 +646,23 @@ async def before_daily_autopost():
         await asyncio.sleep(wait_time)
     except Exception as e:
         logger.error(f"[daily_autopost():before_daily_autopost()] {ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
+
+@tasks.loop(hours=24)
+async def clean_temp_instructions():
+    global gemini_cleaner_mysql
+    try:
+        gemini_cleaner_mysql.clean_temporary_context()
+    except:
+        logger.exception(f"Failed to clear temp context in gemini mysql")
+
+async def before_clean_temp_instructions():
+    try:
+        target_time = time(hour=23, minute=59)
+        wait_time = seconds_until(target_time)
+        await asyncio.sleep(wait_time)
+    except:
+        logger.exception(f'Error waiting for clear of temp context')
+
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(

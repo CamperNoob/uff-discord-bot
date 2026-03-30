@@ -1,11 +1,35 @@
 from google import genai
 from google.genai import types
-from configs.tokens import GeminiAPI, GeminiAPIInstruction, GeminiModel
+from configs.tokens import GeminiAPI, GeminiModel
 import logging
 import traceback
+from mysql_helper import GeminiMySqlConnectionManager
 
 logger = logging.getLogger("gemini")
 logger.setLevel(logging.INFO)
+INSTRUCTION = []
+TMP_CONTEXT_FORMAT = '-|{author}| wrote: |{message}|, you responded: |{response}|'
+mysqlconn = None
+
+try:
+    mysqlconn = GeminiMySqlConnectionManager(logger)
+    #[types.Part(text=entry) for entry in GeminiAPIInstruction]
+    mysqlconn.init_db()
+    mysqlconn.init_tables()
+    rows = mysqlconn.get_persistent_context()
+    rows.append(f'[PREVIOUS CONVERSATIONS IN FORMAT: "{TMP_CONTEXT_FORMAT}"]')
+    rows.extend([TMP_CONTEXT_FORMAT.format(author=author, message=message, response=response) for author, message, response in mysqlconn.get_temporary_context()])
+    
+    if rows:
+        INSTRUCTION = [types.Part(text=entry) for entry in rows]
+except:
+    logger.exception(f"Failed to init MySQL db and get the persistent instructions")
+    raise
+
+def save_temp_instruction(author, message, response):
+    global mysqlconn
+    mysqlconn.insert_temporary_context(author, message, response)
+    logger.info(f"Appended new temporary instruction")
 
 async def get_client(
         api_version: str | None = None
@@ -25,7 +49,9 @@ async def get_client(
 
 async def generate_response(
     client: genai.Client.aio,
-    prompt: str,
+    context_text: str,
+    user_info: str,
+    user_input: str,
     *,
     image_urls: list[str] | None = None,
     image_bytes: list[bytes] | None = None,
@@ -37,6 +63,13 @@ async def generate_response(
     """
     Send a prompt to the AI and return generated content (text).
     """
+    prompt = f'''
+    {{
+        "Context": {context_text},
+        "User info": {user_info},
+        "User message": "{user_input}"
+    }}
+    '''
     contents = [types.Part.from_text(text=prompt)]
     
     if image_urls:
@@ -64,16 +97,22 @@ async def generate_response(
                 temperature=temperature,
                 top_p=top_p,
                 max_output_tokens=max_output_tokens,
-                system_instruction=GeminiAPIInstruction,
+                system_instruction=INSTRUCTION,
             ),
         )
-        return response
+        response_text = response.text.removeprefix('FRS Bot: ')
+        save_temp_instruction(author=user_info, message=user_input, response=response_text)
+        INSTRUCTION.append(types.Part(text=TMP_CONTEXT_FORMAT.format(author=user_info, message=user_input, response=response_text)))
+        logger.info(f'Current instruction length: {len(INSTRUCTION)}')
+        return response_text
     except Exception:
         raise
 
 async def generate_response_stream(
     client: genai.Client.aio,
-    prompt: str,
+    context_text: str,
+    user_info: str,
+    user_input: str,
     *,
     image_urls: list[str] | None = None,
     model: str = "gemini-2.5-flash",
@@ -86,6 +125,14 @@ async def generate_response_stream(
     Yields partial text as it is generated.
     """
     raise NotImplementedError("Not working with streaming")
+    global INSTRUCTION
+    prompt = f'''
+    {{
+        "Context": {context_text},
+        "User info": {user_info},
+        "User message": "{user_input}"
+    }}
+    '''
     contents = [types.Part.from_text(text=prompt)]
 
     if image_urls:
@@ -105,7 +152,7 @@ async def generate_response_stream(
                 temperature=temperature,
                 top_p=top_p,
                 max_output_tokens=max_output_tokens,
-                system_instruction=GeminiAPIInstruction,
+                system_instruction=instruction,
             ),
         ):
             # Only handle partial text deltas
