@@ -8,7 +8,7 @@ from mysql_helper import GeminiMySqlConnectionManager
 logger = logging.getLogger("gemini")
 logger.setLevel(logging.INFO)
 INSTRUCTION = []
-TMP_CONTEXT_FORMAT = '-|{author}| wrote: |{message}|'
+TMP_CONTEXT_FORMAT = '-|{author}| wrote: |{message}|\n you responded: |{response}|'
 mysqlconn = None
 
 try:
@@ -17,7 +17,7 @@ try:
     mysqlconn.init_db()
     mysqlconn.init_tables()
     rows = mysqlconn.get_persistent_context()
-    rows.append(f'USE THE NEXT BLOCK ONLY FOR CONTEXT, NEW RESPONSE SHOULD BE AS USUAL, WITHOUT ANY FORMATTING FROM THE NEXT BLOCK')
+    rows.append(f'USE THE NEXT BLOCK ONLY FOR CONTEXT, NEW RESPONSE SHOULD BE AS USUAL (GENERATE ORIGINAL RESPONSE WITHOUT REUSING THE SAME ONE), WITHOUT ANY FORMATTING FROM THE NEXT BLOCK')
     rows.append(f'[CONTEXT OF PREVIOUS CONVERSATIONS IN FORMAT: "{TMP_CONTEXT_FORMAT}"]')
     rows.extend([TMP_CONTEXT_FORMAT.format(author=author, message=message, response=response) for author, message, response in mysqlconn.get_temporary_context()])
     
