@@ -17,7 +17,7 @@ try:
     mysqlconn.init_db()
     mysqlconn.init_tables()
     rows = mysqlconn.get_persistent_context()
-    rows.append(f'USE THE NEXT BLOCK ONLY FOR CONTEXT, RESPONSE SHOULD BE AS USUAL, WITHOUT ANY FORMATTING FROM THE NEXT BLOCK')
+    rows.append(f'USE THE NEXT BLOCK ONLY FOR CONTEXT, NEW RESPONSE SHOULD BE AS USUAL (ORIGINAL, WITHOUT REUSING ONE-TO-ONE THE RESPONSES FROM THE NEXT BLOCK), WITHOUT ANY FORMATTING FROM THE NEXT BLOCK')
     rows.append(f'[CONTEXT OF PREVIOUS CONVERSATIONS IN FORMAT: "{TMP_CONTEXT_FORMAT}"]')
     rows.extend([TMP_CONTEXT_FORMAT.format(author=author, message=message, response=response) for author, message, response in mysqlconn.get_temporary_context()])
     
