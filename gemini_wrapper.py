@@ -4,6 +4,7 @@ from configs.tokens import GeminiAPI, GeminiModel
 import logging
 import traceback
 from mysql_helper import GeminiMySqlConnectionManager
+import re
 
 logger = logging.getLogger("gemini")
 logger.setLevel(logging.INFO)
@@ -102,10 +103,11 @@ async def generate_response(
             ),
         )
         response_text = response.text.removeprefix('FRS Bot: ')
-        save_temp_instruction(author=user_info, message=user_input, response=response_text)
-        INSTRUCTION.append(types.Part(text=TMP_CONTEXT_FORMAT.format(author=user_info, message=user_input, response=response_text)))
+        response_text_normalized = re.sub(r"\n\s*\n+", "\n", response_text.strip())
+        save_temp_instruction(author=user_info, message=user_input, response=response_text_normalized)
+        INSTRUCTION.append(types.Part(text=TMP_CONTEXT_FORMAT.format(author=user_info, message=user_input, response=response_text_normalized)))
         logger.info(f'Current instruction length: {len(INSTRUCTION)}')
-        return response_text
+        return response_text_normalized
     except Exception:
         raise
 
