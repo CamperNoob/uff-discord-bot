@@ -266,7 +266,6 @@ async def on_ready():
         logger.error(f"Failed to get a client for gemini: {e}; traceback: {traceback.format_exc()}")
     try:
         if not clean_temp_instructions.is_running():
-            await before_clean_temp_instructions()
             clean_temp_instructions.start()
     except:
         logger.exception(f'Failed to initialize auto instruction clear')
@@ -647,22 +646,13 @@ async def before_daily_autopost():
     except Exception as e:
         logger.error(f"[daily_autopost():before_daily_autopost()] {ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
 
-@tasks.loop(hours=24)
+@tasks.loop(time=time(hour=23, minute=59))
 async def clean_temp_instructions():
     global gemini_cleaner_mysql
     try:
         gemini_cleaner_mysql.clean_temporary_context()
     except:
         logger.exception(f"Failed to clear temp context in gemini mysql")
-
-async def before_clean_temp_instructions():
-    try:
-        target_time = time(hour=23, minute=59)
-        wait_time = seconds_until(target_time)
-        await asyncio.sleep(wait_time)
-    except:
-        logger.exception(f'Error waiting for clear of temp context')
-
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
