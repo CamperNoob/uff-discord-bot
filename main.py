@@ -651,6 +651,7 @@ async def clean_temp_instructions():
     global gemini_cleaner_mysql
     try:
         gemini_cleaner_mysql.clean_temporary_context()
+        logger.info(f"Cleared gemini old context")
     except:
         logger.exception(f"Failed to clear temp context in gemini mysql")
 
