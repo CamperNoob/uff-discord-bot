@@ -265,7 +265,9 @@ async def on_ready():
     except Exception as e:
         logger.error(f"Failed to get a client for gemini: {e}; traceback: {traceback.format_exc()}")
     try:
+        logger.info(f"Initializing gemini autoclear instructions")
         if not clean_temp_instructions.is_running():
+            logger.info(f"Currently not running, starting")
             clean_temp_instructions.start()
     except:
         logger.exception(f'Failed to initialize auto instruction clear')
