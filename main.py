@@ -28,15 +28,18 @@ from google.genai.errors import ClientError
 import pytz
 import json
 from configs.amp_api_helper import get_amp_servers, send_reboot_server
+from typing import Optional
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 LOG_DIR = "logs"
 PERSIST_DIR = 'persist'
 LOGS_FILENAME = 'botlogger.log'
 TEMP_CHANNELS_PERSIST = 'temp_channels.json'
+GEMINI_CONTEXT_CLEANER_WATERMARK = 'clean_temp_instructions_wtm.json'
 
 LOGS_FILEPATH = os.path.join(LOG_DIR, LOGS_FILENAME)
 TEMP_CHANNELS_FILEPATH = os.path.join(PERSIST_DIR, TEMP_CHANNELS_PERSIST)
+GEMINI_CONTEXT_CLEANER_WATERMARK_FILEPATH = os.path.join(PERSIST_DIR, GEMINI_CONTEXT_CLEANER_WATERMARK)
 
 logger = logging.getLogger("discord")
 logger.setLevel(logging.INFO)
@@ -76,6 +79,24 @@ daily_quota_timestamp = None
 hub_channel_ids = set(TempVoiceChannels)
 temp_channels = {}
 
+def load_watermark(wtm_path: str) -> datetime:
+    if not os.path.exists(wtm_path):
+        return None
+    try:
+        with open(wtm_path, "r") as f:
+            data = json.load(f)
+            return datetime.fromisoformat(data["ran_at_timestamp"])
+    except Exception:
+        logger.warning(f"Error reading watermark {wtm_path}")
+        return None
+
+def write_watermark(wtm_path: str, wtm: Optional[datetime] = None) -> None:
+    os.makedirs(os.path.dirname(wtm_path), exist_ok=True)
+    if not wtm:
+        wtm = datetime.now(timezone.utc)
+    with open(wtm_path, "w") as f:
+        json.dump({"ran_at_timestamp":wtm.isoformat()}, f)
+
 def load_temp_channels():
     global temp_channels
     try:
@@ -108,7 +129,7 @@ async def guild_chunk_with_timeout(guild: discord.guild, timeout=2):
         return False
 
 def seconds_until(target_time):
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     target = datetime.combine(now.date(), target_time)
     if now > target:
         target += timedelta(days=1)
@@ -648,14 +669,26 @@ async def before_daily_autopost():
     except Exception as e:
         logger.error(f"[daily_autopost():before_daily_autopost()] {ERROR_GENERIC}: {e}; traceback: {traceback.format_exc()}")
 
-@tasks.loop(time=time(hour=23, minute=59))
+@tasks.loop(minutes=10)
 async def clean_temp_instructions():
     global gemini_cleaner_mysql
+    now = datetime.now(timezone.utc)
+    if now.hour != 23:
+        return
+    last_run = load_watermark(GEMINI_CONTEXT_CLEANER_WATERMARK_FILEPATH)
+    if last_run and last_run.date() == now.date():
+        return
     try:
         gemini_cleaner_mysql.clean_temporary_context()
+        write_watermark(GEMINI_CONTEXT_CLEANER_WATERMARK_FILEPATH, now)
         logger.info(f"Cleared gemini old context")
     except:
         logger.exception(f"Failed to clear temp context in gemini mysql")
+
+@clean_temp_instructions.before_loop
+async def before_clean_temp_instructions():
+    await bot.wait_until_ready()
+    logger.info("clean_temp_instructions loop is ready")
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
@@ -1838,9 +1871,13 @@ async def time_val_autocomplete(interaction: discord.Interaction, value: str):
     now = datetime.now()
     choices = [
         (now.strftime("%H:%M")),
+        ((now + timedelta(hours=1)).strftime("%H:%M")),
         (now.strftime("%H:%M:%S")),
+        ((now + timedelta(hours=1)).strftime("%H:%M:%S")),
         (now.strftime("%I:%M %p")),
-        (now.strftime("%I:%M:%S %p"))
+        ((now + timedelta(hours=1)).strftime("%I:%M %p")),
+        (now.strftime("%I:%M:%S %p")),
+        ((now + timedelta(hours=1)).strftime("%I:%M:%S %p"))
     ]
     return [discord.app_commands.Choice(name=s, value=s) for s in choices if s.startswith(value)]
 
