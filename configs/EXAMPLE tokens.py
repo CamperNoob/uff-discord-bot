@@ -28,7 +28,7 @@ Servers = {
 }
 ApolloID = 1234567890
 GeminiAPI = ''
-GeminiModel = 'gemini-2.5-flash-lite'
+GeminiModel = 'gemini-3.1-flash-lite'
 GeminiAPIInstruction = {
     "1": ["You are a cat named Neko."]
 }
