@@ -695,8 +695,8 @@ async def before_clean_temp_instructions():
     logger.info("clean_temp_instructions loop is ready")
 
 async def honeypot_autoban(message: discord.Message):
-    logger.info(f"DEBUG honeypot: channel:{message.channel}, guild: {message.guild}, user_name: {message.author.global_name}, text: {message.content}")
-    if message.channel is None or message.guild is None or message.channel not in AutoBanChannels:
+    logger.info(f"DEBUG honeypot: channel:{message.channel.id}, guild: {message.guild}, user_name: {message.author.global_name}, text: {message.content}")
+    if message.channel is None or message.guild is None or message.channel.id not in AutoBanChannels:
         return False
     user = message.author
     user_global_name = user.global_name
