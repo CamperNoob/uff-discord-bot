@@ -198,4 +198,4 @@ REBOOT_SERVER_ERROR_IN_PROGRESS = f"{ERROR_GENERIC}: Server is already restartin
 REBOOT_SERVER_SUCCESS = "Successfully sent reboot request to the server"
 
 HONEYPOT_AUTOBAN_BLACKLIST_DM = "Your message was deleted, but you weren't banned, because you have one of the protected roles"
-HONEYPOT_AUTOBAN_BANNED = "User {user_name} (@<{user_id}>) was banned permanently for spam {clown_emoji}"
+HONEYPOT_AUTOBAN_BANNED = "User {user_name} (<@{user_id}>) was banned permanently for spam {clown_emoji}"
