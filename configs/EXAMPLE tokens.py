@@ -45,3 +45,9 @@ amp_allowed_reboot_instances = [
     {"InstanceName": "Server01"},
     {"InstanceName": "Server02"},  
 ]
+AutoBanChannels = [ # text channels, from which the user is banned when written into
+    1234567890
+]
+AutoBanRoleBlacklist = [ # role that user must NOT have in order to be autobanned from writing into autoban channel
+    1234567890
+]

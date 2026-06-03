@@ -13,8 +13,7 @@ from discord.ext import commands, tasks
 from logging.handlers import TimedRotatingFileHandler
 from collections import defaultdict
 from datetime import datetime, time, timedelta, timezone
-from configs.tokens import DiscordToken, Grafana, Servers, TempVoiceChannels
-from configs.tokens import ApolloID as apollo_id
+from configs.tokens import DiscordToken, Grafana, Servers, TempVoiceChannels, ApolloID as apollo_id, AutoBanChannels, AutoBanRoleBlacklist
 from configs.seeding_messages_config import autopost_conf
 from configs.perms import unpack_conf, unpack_matching_conf, unpack_matching, strict_has_any_role
 from configs.gifs_command import get_gifs
@@ -473,6 +472,11 @@ async def on_voice_state_update(member, before, after):
 
 @bot.event
 async def on_message(message: discord.Message):
+    is_autoban = await honeypot_autoban(message)
+    if is_autoban: # if the message is relevant to autoban - do not try to do checks on gemini
+        await bot.process_commands(message)
+        return
+
     global gemini
     global daily_quota_timestamp
 
@@ -689,6 +693,38 @@ async def clean_temp_instructions():
 async def before_clean_temp_instructions():
     await bot.wait_until_ready()
     logger.info("clean_temp_instructions loop is ready")
+
+async def honeypot_autoban(message: discord.Message):
+    if message.channel is None or message.guild is None or message.channel not in AutoBanChannels:
+        return False
+    user = message.author
+    user_global_name = user.global_name
+    user_display_name = user.name
+    user_id = user.id
+    user_roles = [role.id for role in user.roles]
+    try:
+        if any(role_id in AutoBanRoleBlacklist for role_id in user_roles): # do not ban
+            dm_channel = await user.create_dm()
+            try:
+                await dm_channel.send(HONEYPOT_AUTOBAN_BLACKLIST_DM)
+            except:
+                logger.info("Failed to send the dm from honeypot autoban")
+                pass # failed to send dm - we do not care
+        else: # ban
+            message_content = "!missing context!"
+            message_attachments = "!missing attachments!"
+            try:
+                message_content = message.content
+                message_attachments = str([a.url for a in message.attachments])
+            except: # any exceptions on getting either - do not care
+                pass
+            logger.info(f"Banning user {user_id} for message text: `{message_content}` and attachments: `{message_attachments}`")
+            await message.guild.ban(user, reason="Spam", delete_message_days=7)
+            await message.channel.send(HONEYPOT_AUTOBAN_BANNED.format(user_id=user_id, user_name=user_display_name or user_global_name, clown_emoji="🤡"))
+        await message.delete() # delete the initial message afterwards
+    except:
+        logger.exception(f"Failed to execute honeypot autoban")
+    return True
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
