@@ -472,6 +472,10 @@ async def on_voice_state_update(member, before, after):
 
 @bot.event
 async def on_message(message: discord.Message):
+    if message.author == bot.user: # skip checking own messages entirely
+        await bot.process_commands(message)
+        return
+    
     is_autoban = await honeypot_autoban(message)
     if is_autoban: # if the message is relevant to autoban - do not try to do checks on gemini
         await bot.process_commands(message)
@@ -481,7 +485,7 @@ async def on_message(message: discord.Message):
     global daily_quota_timestamp
 
     # Ignore messages from the bot itself
-    if message.author == bot.user or not gemini:
+    if not gemini:
         await bot.process_commands(message)
         return
 
@@ -696,17 +700,24 @@ async def before_clean_temp_instructions():
 
 async def honeypot_autoban(message: discord.Message):
     # logger.info(f"DEBUG honeypot: channel:{message.channel.id}, guild: {message.guild}, user_name: {message.author.global_name}, text: {message.content}")
-    if message.channel is None or message.guild is None or message.channel.id not in AutoBanChannels:
+    if (
+        message.author.bot # bot
+        or message.channel is None # in dms
+        or message.guild is None # in dms
+        or message.channel.id not in AutoBanChannels # in any other channel
+    ):
         return False
     user = message.author
     user_global_name = user.global_name
     user_display_name = user.name
     user_id = user.id
-    user_roles = [role.id for role in user.roles]
+    user_roles = []
+    if isinstance(user, discord.Member): # will raise for discord.User (DMs) or discord.ClientUser (Bot message)
+        user_roles = [role.id for role in user.roles]
     try:
         if any(role_id in AutoBanRoleBlacklist for role_id in user_roles): # do not ban
-            dm_channel = await user.create_dm()
             try:
+                dm_channel = await user.create_dm()
                 await dm_channel.send(HONEYPOT_AUTOBAN_BLACKLIST_DM)
             except:
                 logger.info("Failed to send the dm from honeypot autoban")
