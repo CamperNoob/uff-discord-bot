@@ -731,7 +731,12 @@ async def honeypot_autoban(message: discord.Message):
             except: # any exceptions on getting either - do not care
                 pass
             logger.info(f"Banning user {user_id} for message text: `{message_content}` and attachments: `{message_attachments}`")
-            await message.guild.ban(user, reason="Spam", delete_message_days=7)
+            await message.guild.ban(user, reason="Spam", delete_message_seconds=(
+                7 *  # days
+                24 * # hours
+                60 * # minutes
+                60   # seconds
+            ))
             await message.channel.send(HONEYPOT_AUTOBAN_BANNED.format(user_id=user_id, user_name=user_display_name or user_global_name, clown_emoji="🤡"))
         await message.delete() # delete the initial message afterwards
     except:
