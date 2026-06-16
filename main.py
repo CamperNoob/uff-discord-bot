@@ -79,6 +79,7 @@ hub_channel_ids = set(TempVoiceChannels)
 temp_channels = {}
 
 mention_spam_counter = {}
+mention_spam_last_trigger = None
 
 def load_watermark(wtm_path: str) -> datetime:
     if not os.path.exists(wtm_path):
