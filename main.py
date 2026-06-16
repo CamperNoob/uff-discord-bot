@@ -772,7 +772,7 @@ async def mention_spam_autoban(message: discord.Message) -> bool:
         pass # for debug or if want to delete anyway
     global mention_spam_counter
     global mention_spam_last_trigger
-    logger.info(f"DEBUG mention spam:\ncounter:\n{json.dumps(mention_spam_counter, indent=4)}\nlast trigger:{mention_spam_last_trigger.isoformat()}")
+    logger.info(f"DEBUG mention spam:\ncounter:\n{json.dumps(mention_spam_counter, indent=4)}\nlast trigger:{'None' if mention_spam_last_trigger is None else mention_spam_last_trigger.isoformat()}")
     trigger_timestamp = datetime.now(timezone.utc)
     previous_trigger_timestamp = mention_spam_last_trigger # get current value
     mention_spam_last_trigger = trigger_timestamp # set new value to global variable
