@@ -737,7 +737,24 @@ async def autoban_func(message: discord.Message, reason: str):
                 60 * # minutes
                 60   # seconds
             ))
-            await message.channel.send(random.choice(HONEYPOT_AUTOBAN_BANNED).format(user_id=user_id, user_name=user_display_name or user_global_name))
+            report_to_channel = None # message.channel
+            for channel_id in AutoBanChannels:
+                report_to_channel = message.guild.get_channel(channel_id)
+                if report_to_channel is None:
+                    try:
+                        report_to_channel = await message.guild.fetch_channel(channel_id)
+                        break
+                    except:
+                        continue
+                break
+            if report_to_channel is not None:
+                try:
+                    await report_to_channel.send(random.choice(HONEYPOT_AUTOBAN_BANNED).format(user_id=user_id, user_name=user_display_name or user_global_name)) # 1511737259022356730
+                except:
+                    logger.info(f"Failed to send ban notification to channel in guild {message.guild.id}")
+                    pass
+            else:
+                logger.info(f"Failed to resolve ban notification channel in guild {message.guild.id}")
         await message.delete() # delete the initial message afterwards
     except:
         logger.warning(f"Failed to delete the message that triggered autoban")
