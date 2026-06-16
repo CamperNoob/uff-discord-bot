@@ -197,5 +197,18 @@ REBOOT_SERVER_ERROR_NOT_FOUND = f"{ERROR_GENERIC}: Server not found, please use 
 REBOOT_SERVER_ERROR_IN_PROGRESS = f"{ERROR_GENERIC}: Server is already restarting, please try again later"
 REBOOT_SERVER_SUCCESS = "Successfully sent reboot request to the server"
 
-HONEYPOT_AUTOBAN_BLACKLIST_DM = "Your message was deleted, but you weren't banned, because you have one of the protected roles"
-HONEYPOT_AUTOBAN_BANNED = "User {user_name} (<@{user_id}>) was banned permanently for spam {clown_emoji}"
+HONEYPOT_AUTOBAN_BLACKLIST_DM = "Your message was deleted, but you weren't banned, because you have one of the protected roles ({reason})"
+HONEYPOT_AUTOBAN_REASON_CHANNEL_POST = "posted in autoban channel"
+HONEYPOT_AUTOBAN_REASON_MENTION_SPAM = "mentioned same role in short time span"
+HONEYPOT_AUTOBAN_BANNED = [
+    "{user_name} (<@{user_id}>) was vaporized by the anti-spam tribunal ⚖️💥",
+    "{user_name} (<@{user_id}>) attempted diplomacy with spam. It did not go well ☠️",
+    "{user_name} (<@{user_id}>) has been permanently yeeted from reality for spam 🚀",
+    "{user_name} (<@{user_id}>) was caught speedrunning a ban any% 🏃💨",
+    "{user_name} (<@{user_id}>) has been archived in the Hall of Shame for spam 🗄️",
+    "{user_name} (<@{user_id}>) violated the sacred anti-spam protocols and paid the price 📜",
+    "{user_name} (<@{user_id}>) was turned into an example for educational purposes 📚",
+    "{user_name} (<@{user_id}>) triggered containment failure in the spam reactor ☢️",
+    "{user_name} (<@{user_id}>) has been escorted out by the moderation gremlins 👹",
+    "{user_name} (<@{user_id}>) achieved instant ban speedrun world record (WR pending review) 🥇"
+    ]

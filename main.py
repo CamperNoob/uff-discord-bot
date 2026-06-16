@@ -78,6 +78,8 @@ daily_quota_timestamp = None
 hub_channel_ids = set(TempVoiceChannels)
 temp_channels = {}
 
+mention_spam_counter = {}
+
 def load_watermark(wtm_path: str) -> datetime:
     if not os.path.exists(wtm_path):
         return None
@@ -480,6 +482,11 @@ async def on_message(message: discord.Message):
     if is_autoban: # if the message is relevant to autoban - do not try to do checks on gemini
         await bot.process_commands(message)
         return
+    
+    is_autoban = await mention_spam_autoban(message)
+    if is_autoban: # same check as before
+        await bot.process_commands(message)
+        return
 
     global gemini
     global daily_quota_timestamp
@@ -698,15 +705,7 @@ async def before_clean_temp_instructions():
     await bot.wait_until_ready()
     logger.info("clean_temp_instructions loop is ready")
 
-async def honeypot_autoban(message: discord.Message):
-    # logger.info(f"DEBUG honeypot: channel:{message.channel.id}, guild: {message.guild}, user_name: {message.author.global_name}, text: {message.content}")
-    if (
-        message.author.bot # bot
-        or message.channel is None # in dms
-        or message.guild is None # in dms
-        or message.channel.id not in AutoBanChannels # in any other channel
-    ):
-        return False
+async def autoban_func(message: discord.Message, reason: str):
     user = message.author
     user_global_name = user.global_name
     user_display_name = user.name
@@ -715,10 +714,10 @@ async def honeypot_autoban(message: discord.Message):
     if isinstance(user, discord.Member): # will raise for discord.User (DMs) or discord.ClientUser (Bot message)
         user_roles = [role.id for role in user.roles]
     try:
-        if any(role_id in AutoBanRoleBlacklist for role_id in user_roles): # do not ban
+        if any(role_id in AutoBanRoleBlacklist for role_id in user_roles): # do not ban protected roles (cannot be triggered by protected roles)
             try:
                 dm_channel = await user.create_dm()
-                await dm_channel.send(HONEYPOT_AUTOBAN_BLACKLIST_DM)
+                await dm_channel.send(HONEYPOT_AUTOBAN_BLACKLIST_DM.format(reason=reason))
             except:
                 logger.info("Failed to send the dm from honeypot autoban")
                 pass # failed to send dm - we do not care
@@ -737,11 +736,75 @@ async def honeypot_autoban(message: discord.Message):
                 60 * # minutes
                 60   # seconds
             ))
-            await message.channel.send(HONEYPOT_AUTOBAN_BANNED.format(user_id=user_id, user_name=user_display_name or user_global_name, clown_emoji="🤡"))
+            await message.channel.send(random.choice(HONEYPOT_AUTOBAN_BANNED).format(user_id=user_id, user_name=user_display_name or user_global_name))
         await message.delete() # delete the initial message afterwards
     except:
-        logger.exception(f"Failed to execute honeypot autoban")
+        logger.warning(f"Failed to delete the message that triggered autoban")
+
+async def honeypot_autoban(message: discord.Message) -> bool:
+    # logger.info(f"DEBUG honeypot: channel:{message.channel.id}, guild: {message.guild}, user_name: {message.author.global_name}, text: {message.content}")
+    if (
+        message.author.bot # bot
+        or message.channel is None # in dms
+        or message.guild is None # in dms
+        or message.channel.id not in AutoBanChannels # in any other channel
+    ):
+        return False
+    await autoban_func(message, HONEYPOT_AUTOBAN_REASON_CHANNEL_POST)
     return True
+
+async def mention_spam_autoban(message: discord.Message) -> bool:
+    seconds_window = 60
+    if (
+        message.author.bot # bot
+        or message.channel is None # in dms
+        or message.guild is None # in dms
+    ):
+        return False
+    if not message.role_mentions:
+        return False # no mentions = no checks
+    user = message.author
+    user_roles = []
+    if isinstance(user, discord.Member): # will raise for discord.User (DMs) or discord.ClientUser (Bot message)
+        user_roles = [role.id for role in user.roles]
+    if any(role_id in AutoBanRoleBlacklist for role_id in user_roles):
+        # return False # protected role triggered the execution - do not care, skip completely (we do not need the dm part of the code)
+        pass # for debug or if want to delete anyway
+    global mention_spam_counter
+    global mention_spam_last_trigger
+    logger.info(f"DEBUG mention spam:\ncounter:\n{json.dumps(mention_spam_counter, indent=4)}\nlast trigger:{mention_spam_last_trigger.isoformat()}")
+    trigger_timestamp = datetime.now(timezone.utc)
+    previous_trigger_timestamp = mention_spam_last_trigger # get current value
+    mention_spam_last_trigger = trigger_timestamp # set new value to global variable
+    if previous_trigger_timestamp is None:
+        previous_trigger_timestamp = trigger_timestamp
+    if (trigger_timestamp - previous_trigger_timestamp).total_seconds() > seconds_window: # if last execution was >1 minute ago - all entries are expired already, so only 'new entry' part of the code will fire
+        mention_spam_counter = {} # clear the memory
+    user_id = user.id
+    previous_mentions = mention_spam_counter.get(user_id)
+    message_role_mentions = {role.id for role in message.role_mentions}
+    if not previous_mentions: # no previous mentions for this user - add the entries and exit
+        mention_spam_counter[user_id] = {
+            role: trigger_timestamp
+            for role in message_role_mentions
+        }
+        return False
+    else:
+        for role in message_role_mentions:
+            role_mention = previous_mentions.get(role)
+            if not role_mention: # this role wasn't triggered previously - add it to the tracking and check the next one
+                mention_spam_counter[user_id][role] = trigger_timestamp
+                continue
+            else:
+                time_passed_from_last_mention = (trigger_timestamp - role_mention).total_seconds()
+                if time_passed_from_last_mention > seconds_window: # more than a minute passed
+                    mention_spam_counter[user_id][role] = trigger_timestamp # refresh the role tracking and check the next one
+                    continue
+                else:
+                    mention_spam_counter.pop(user_id) # remove user from memory
+                    await autoban_func(message, HONEYPOT_AUTOBAN_REASON_MENTION_SPAM) # ban or delete message
+                    return True
+        return False # this part is triggered only if ban is not triggered and the whole list of mentions checked
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
