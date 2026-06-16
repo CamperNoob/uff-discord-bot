@@ -769,11 +769,11 @@ async def mention_spam_autoban(message: discord.Message) -> bool:
     if isinstance(user, discord.Member): # will raise for discord.User (DMs) or discord.ClientUser (Bot message)
         user_roles = [role.id for role in user.roles]
     if any(role_id in AutoBanRoleBlacklist for role_id in user_roles):
-        # return False # protected role triggered the execution - do not care, skip completely (we do not need the dm part of the code)
-        pass # for debug or if want to delete anyway
+        return False # protected role triggered the execution - do not care, skip completely (we do not need the dm part of the code)
+        # pass # for debug or if want to delete anyway
     global mention_spam_counter
     global mention_spam_last_trigger
-    logger.info(f"DEBUG mention spam:\ncounter:\n{json.dumps(mention_spam_counter, indent=4, default=lambda o: o.isoformat() if hasattr(o, "isoformat") else str(o))}\nlast trigger:{'None' if mention_spam_last_trigger is None else mention_spam_last_trigger.isoformat()}")
+    # logger.info(f"DEBUG mention spam:\ncounter:\n{json.dumps(mention_spam_counter, indent=4, default=lambda o: o.isoformat() if hasattr(o, "isoformat") else str(o))}\nlast trigger:{'None' if mention_spam_last_trigger is None else mention_spam_last_trigger.isoformat()}")
     trigger_timestamp = datetime.now(timezone.utc)
     previous_trigger_timestamp = mention_spam_last_trigger # get current value
     mention_spam_last_trigger = trigger_timestamp # set new value to global variable
