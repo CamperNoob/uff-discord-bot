@@ -212,3 +212,12 @@ HONEYPOT_AUTOBAN_BANNED = [
     "{user_name} (<@{user_id}>) has been escorted out by the moderation gremlins 👹",
     "{user_name} (<@{user_id}>) achieved instant ban speedrun world record (WR pending review) 🥇"
     ]
+
+PZ_SERVER_MODS_DESCRIPTION = "Installs mods on the Project Zomboid server"
+PZ_SERVER_MODS_SERVER = "Target server to install mods"
+PZ_SERVER_MODS_WORKSHOP_ITEMS = "IDs from steam workshop in format '123;123;123'"
+PZ_SERVER_MODS_MODS = "Mod IDs in format 'PZ_MOD1;PZ_MOD2;PZ_MOD3'"
+PZ_SERVER_MODS_DEFER = "Trying to install mods"
+PZ_SERVER_MODS_ERROR_NOT_FOUND = f"{ERROR_GENERIC}: Server not found, please use the values from autocomplete"
+PZ_SERVER_MODS_ERROR_API = f"{ERROR_GENERIC}: Failed to install mods, please try again later"
+PZ_SERVER_MODS_SUCCESS = "Successfully sent mod install request to the server. Please reboot the server to finish installation"

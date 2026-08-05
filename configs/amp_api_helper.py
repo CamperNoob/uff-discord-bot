@@ -64,3 +64,29 @@ async def send_reboot_server(instance_name: str) -> Tuple[bool, Exception | None
         return False, e, None
     else:
         return True, None, API_INSTANCE_CACHE[instance_name]["friendly_name"]
+
+async def send_set_zomboid_mods(instance_name: str, workshop_items: str, mods: str) -> Tuple[bool, Exception | None, str | None]:
+    _bridge = amp.Bridge(api_params=_params)
+
+    global API_INSTANCE_CACHE
+
+    if instance_name not in API_INSTANCE_CACHE:
+        return False, ValueError(f"Error: server not found with name {instance_name}"), None
+
+    try:
+        instance = API_INSTANCE_CACHE[instance_name]["instance"]
+        data = {
+            # node:value
+            "Meta.GenericModule.WorkshopItems": workshop_items,
+            "Meta.GenericModule.Mods": mods
+        }
+        _success = await instance.set_configs(data)
+        if not _success:
+            False, None, API_INSTANCE_CACHE[instance_name]["friendly_name"]
+        else:
+            True, None, API_INSTANCE_CACHE[instance_name]["friendly_name"]
+            
+    except Exception as e:
+        return False, e, None
+    else:
+        return True, None, API_INSTANCE_CACHE[instance_name]["friendly_name"]

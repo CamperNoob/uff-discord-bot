@@ -26,7 +26,7 @@ from mysql_helper import get_db_connection, GeminiMySqlConnectionManager
 from google.genai.errors import ClientError
 import pytz
 import json
-from configs.amp_api_helper import get_amp_servers, send_reboot_server
+from configs.amp_api_helper import get_amp_servers, send_reboot_server, send_set_zomboid_mods
 from typing import Optional
 
 DISCORD_MAX_MESSAGE_LEN = 2000
@@ -2156,6 +2156,40 @@ async def reboot_server(interaction: discord.Interaction, server: str):
         else:
             await interaction.delete_original_response()
             await send_with_fallback(interaction, f"{REBOOT_SERVER_SUCCESS} {friendly_name}")
+    except Exception as e:
+        await interaction.edit_original_response(content=f"{ERROR_GENERIC}: {e}")
+        logger.error(f"{ERROR_GENERIC}: {e}; args: {server}; traceback: {traceback.format_exc()}")
+    return
+
+@bot.tree.command(name="set_pz_server_mods", description=f"{PZ_SERVER_MODS_DESCRIPTION}.")
+@discord.app_commands.describe(
+    server=f"{PZ_SERVER_MODS_SERVER}.",
+    workshop_items=f"{PZ_SERVER_MODS_WORKSHOP_ITEMS}.",
+    mods=f"{PZ_SERVER_MODS_MODS}."
+)
+@discord.app_commands.autocomplete(
+    server=get_amp_servers
+)
+@strict_has_any_role(*unpack_conf())
+@commands.guild_only()
+async def reboot_server(interaction: discord.Interaction, server: str, workshop_items: str, mods: str):
+    logger.info(f"Received set_pz_server_mods: {server} from user: {interaction.user.name} <@{interaction.user.id}>")
+    logger.info(f"Workshop items: {workshop_items}")
+    logger.info(f"Mods: {mods}")
+    try:
+        await interaction.response.send_message(f"{PZ_SERVER_MODS_DEFER}{discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=True)
+        is_success, exception, friendly_name = await send_set_zomboid_mods(server, workshop_items, mods)
+        if not is_success:
+            if isinstance(exception, ValueError):
+                await interaction.edit_original_response(content=f"{PZ_SERVER_MODS_ERROR_NOT_FOUND}")
+            else:
+                if exception:
+                    raise exception
+                else:
+                   await interaction.edit_original_response(content=f"{PZ_SERVER_MODS_ERROR_API} {friendly_name}") 
+        else:
+            await interaction.delete_original_response()
+            await send_with_fallback(interaction, f"{PZ_SERVER_MODS_SUCCESS} {friendly_name}")
     except Exception as e:
         await interaction.edit_original_response(content=f"{ERROR_GENERIC}: {e}")
         logger.error(f"{ERROR_GENERIC}: {e}; args: {server}; traceback: {traceback.format_exc()}")
