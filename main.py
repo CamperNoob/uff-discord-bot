@@ -2193,7 +2193,7 @@ async def reboot_server(interaction: discord.Interaction, server: str, workshop_
                    await interaction.edit_original_response(content=f"{PZ_SERVER_MODS_ERROR_API} {friendly_name}") 
         else:
             await interaction.delete_original_response()
-            await send_with_fallback(interaction, f"{PZ_SERVER_MODS_SUCCESS} {friendly_name}")
+            await send_with_fallback(interaction, f"{PZ_SERVER_MODS_SUCCESS} {friendly_name}\nworkshop_items: `{workshop_items if workshop_items != '' else ' '}`\nmods: `{mods if mods != '' else ' '}`")
     except Exception as e:
         await interaction.edit_original_response(content=f"{ERROR_GENERIC}: {e}")
         logger.error(f"{ERROR_GENERIC}: {e}; args: {server}; traceback: {traceback.format_exc()}")
