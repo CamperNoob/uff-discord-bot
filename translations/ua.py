@@ -215,8 +215,8 @@ HONEYPOT_AUTOBAN_BANNED = [
 
 PZ_SERVER_MODS_DESCRIPTION = "Установлює моди на сервер Project Zomboid"
 PZ_SERVER_MODS_SERVER = "Сервер на який ставити моди"
-PZ_SERVER_MODS_WORKSHOP_ITEMS = "ID із стім воркшопу у форматі '123;123;123'"
-PZ_SERVER_MODS_MODS = "ID модів у форматі 'PZ_MOD1;PZ_MOD2;PZ_MOD3'"
+PZ_SERVER_MODS_WORKSHOP_ITEMS = "ID із стім воркшопу у форматі '123;123;123' або '-' щоб оставити пустим"
+PZ_SERVER_MODS_MODS = "ID модів у форматі 'PZ_MOD1;PZ_MOD2;PZ_MOD3' або '-' щоб оставити пустим"
 PZ_SERVER_MODS_DEFER = "Спроба установити моди"
 PZ_SERVER_MODS_ERROR_NOT_FOUND = f"{ERROR_GENERIC}: Сервер не знайдено, будь-ласка використовуйте значення із запропонованих"
 PZ_SERVER_MODS_ERROR_API = f"{ERROR_GENERIC}: Помилка встановлення модів, спробуйте пізніше"

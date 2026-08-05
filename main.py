@@ -2178,6 +2178,10 @@ async def reboot_server(interaction: discord.Interaction, server: str, workshop_
     logger.info(f"Mods: {mods}")
     try:
         await interaction.response.send_message(f"{PZ_SERVER_MODS_DEFER}{discord.utils.get(bot.emojis, name='loading') or '...'}", ephemeral=True)
+        if workshop_items == '-':
+            workshop_items = ""
+        if mods == '-':
+            mods = ""
         is_success, exception, friendly_name = await send_set_zomboid_mods(server, workshop_items, mods)
         if not is_success:
             if isinstance(exception, ValueError):
