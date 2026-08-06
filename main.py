@@ -846,6 +846,10 @@ async def zugzwang_clown(message: discord.Message) -> None:
     if message.author.id != check_id:
         return
     message_content = (message.content).strip().split()
+    if not message_content: # empty message with only file attached for example
+        return
+    if message_content < 1: # explicit bot trigger checks
+        return
     max_len = zugzwang.get("word_limit")
     if len(message_content) > max_len:
         return
