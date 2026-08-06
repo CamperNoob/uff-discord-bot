@@ -2193,7 +2193,13 @@ async def reboot_server(interaction: discord.Interaction, server: str, workshop_
                    await interaction.edit_original_response(content=f"{PZ_SERVER_MODS_ERROR_API} {friendly_name}") 
         else:
             await interaction.delete_original_response()
-            await send_with_fallback(interaction, f"{PZ_SERVER_MODS_SUCCESS} {friendly_name}\nworkshop_items: `{workshop_items if workshop_items != '' else ' '}`\nmods: `{mods if mods != '' else ' '}`")
+            set_list = f"workshop_items: `{workshop_items if workshop_items != '' else ' '}`\nmods: `{mods if mods != '' else ' '}`"
+            send_message = f"{PZ_SERVER_MODS_SUCCESS} {friendly_name}"
+            if len(f"{send_message}\n{set_list}") < DISCORD_MAX_MESSAGE_LEN:
+                await send_with_fallback(interaction, f"{send_message}\n{set_list}")
+            else:
+                file = discord.File(io.BytesIO(set_list.encode("utf-8")), filename="mods.txt")
+                await send_with_fallback(interaction, content=send_message, file=file)
     except Exception as e:
         await interaction.edit_original_response(content=f"{ERROR_GENERIC}: {e}")
         logger.error(f"{ERROR_GENERIC}: {e}; args: {server}; traceback: {traceback.format_exc()}")
