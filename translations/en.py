@@ -221,3 +221,5 @@ PZ_SERVER_MODS_DEFER = "Trying to install mods"
 PZ_SERVER_MODS_ERROR_NOT_FOUND = f"{ERROR_GENERIC}: Server not found, please use the values from autocomplete"
 PZ_SERVER_MODS_ERROR_API = f"{ERROR_GENERIC}: Failed to install mods, please try again later"
 PZ_SERVER_MODS_SUCCESS = "Successfully sent mod install request to the server. Please reboot the server to finish installation"
+
+DISCORD_CROPPED_MESSAGE = "(message truncated, see full message in attached file)"

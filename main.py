@@ -112,6 +112,22 @@ async def save_temp_channels():
         json.dump(temp_channels, f)
 
 async def send_with_fallback(interaction: discord.Interaction, *args, **kwargs):
+    content = kwargs.get("content")
+    if content is None and args:
+        content = args[0]
+    if isinstance(content, str) and len(content) > DISCORD_MAX_MESSAGE_LEN:
+        file = discord.File(io.BytesIO(content.encode("utf-8")), filename="message.txt")
+        cropped = content[:DISCORD_MAX_MESSAGE_LEN - 100] + f"\n\n... {DISCORD_CROPPED_MESSAGE}"
+        if args:
+            args = (cropped, *args[1:])
+        else:
+            kwargs["content"] = cropped
+        if "file" in kwargs:
+            kwargs["files"] = [kwargs.pop("file"), file]
+        elif "files" in kwargs:
+            kwargs["files"] = [*kwargs["files"], file]
+        else:
+            kwargs["file"] = file
     try:
         return await interaction.response.send_message(*args, **kwargs)
     except discord.InteractionResponded:
