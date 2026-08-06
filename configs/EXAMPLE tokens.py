@@ -51,3 +51,16 @@ AutoBanChannels = [ # text channels, from which the user is banned when written 
 AutoBanRoleBlacklist = [ # role that user must NOT have in order to be autobanned from writing into autoban channel
     1234567890
 ]
+
+zugzwang = {
+    "id": 12345678,
+    "word_limit": 10,
+    "dictionary": [
+        "try",
+        "using",
+        "warning"
+    ],
+    "replies": [
+        "tenor.com/gif_1"
+    ]
+}

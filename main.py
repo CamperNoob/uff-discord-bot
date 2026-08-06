@@ -13,7 +13,7 @@ from discord.ext import commands, tasks
 from logging.handlers import TimedRotatingFileHandler
 from collections import defaultdict
 from datetime import datetime, time, timedelta, timezone
-from configs.tokens import DiscordToken, Grafana, Servers, TempVoiceChannels, ApolloID as apollo_id, AutoBanChannels, AutoBanRoleBlacklist
+from configs.tokens import DiscordToken, Grafana, Servers, TempVoiceChannels, ApolloID as apollo_id, AutoBanChannels, AutoBanRoleBlacklist, zugzwang
 from configs.seeding_messages_config import autopost_conf
 from configs.perms import unpack_conf, unpack_matching_conf, unpack_matching, strict_has_any_role
 from configs.gifs_command import get_gifs
@@ -540,6 +540,7 @@ async def on_message(message: discord.Message):
             logger.warning(f"Could not fetch replied message: {e}")
 
     if not should_respond:
+        await zugzwang_clown(message)
         await bot.process_commands(message)
         return
 
@@ -839,6 +840,29 @@ async def mention_spam_autoban(message: discord.Message) -> bool:
                     await autoban_func(message, HONEYPOT_AUTOBAN_REASON_MENTION_SPAM) # ban or delete message
                     return True
         return False # this part is triggered only if ban is not triggered and the whole list of mentions checked
+
+async def zugzwang_clown(message: discord.Message) -> None:
+    check_id = zugzwang.get("id")
+    if message.author.id != check_id:
+        return
+    message_content = (message.content).strip().split()
+    max_len = zugzwang.get("word_limit")
+    if len(message_content) > max_len:
+        return
+    prefixes = tuple(zugzwang.get("dictionary"))
+    if not any(s.startswith(prefixes) for s in message_content):
+        return
+    selected_reply = random.choice(zugzwang.get("replies"))
+    try:
+        await message.reply(selected_reply, mention_author=False) # mention_author - means @username mention in the reply text
+        logger.info(f"Replied to zugzwang, word count: {len(message_content)}")
+    except Exception as e1:
+        logger.warning(f"Failed to reply to zugzwang first time: {e1}")
+        try:
+            await message.channel.send(f"<@{check_id}>\n{selected_reply}")
+        except Exception as e2:
+            logger.warning(f"Failed to reply to zugzwang second time: {e2}")
+
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
 @discord.app_commands.describe(
