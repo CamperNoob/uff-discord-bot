@@ -846,16 +846,26 @@ async def zugzwang_clown(message: discord.Message) -> None:
     if message.author.id != check_id:
         return
     message_content = (message.content).strip().split()
+    skip_message_checks = False
     if not message_content: # empty message with only file attached for example
-        return
-    if len(message_content) < 1: # explicit bot trigger checks
-        return
-    max_len = zugzwang.get("word_limit")
-    if len(message_content) > max_len:
-        return
-    prefixes = tuple(zugzwang.get("dictionary"))
-    if not any(s.startswith(prefixes) for s in message_content):
-        return
+        if message.attachments:
+            if len(message.attachments) > 1:
+                return
+            suffixes = (".png", ".jpg", ".jpeg")
+            att = message.attachments[0]
+            if not (att.content_type and att.content_type.startswith("image/")) or (att.filename.lower().endswith(suffixes)):
+                return
+            else:
+                skip_message_checks = True
+    if not skip_message_checks:
+        if len(message_content) < 1: # explicit bot trigger checks
+            return
+        max_len = zugzwang.get("word_limit")
+        if len(message_content) > max_len:
+            return
+        prefixes = tuple(zugzwang.get("dictionary"))
+        if not any(s.startswith(prefixes) for s in message_content):
+            return
     selected_reply = random.choice(zugzwang.get("replies"))
     try:
         await message.reply(selected_reply, mention_author=False) # mention_author - means @username mention in the reply text
