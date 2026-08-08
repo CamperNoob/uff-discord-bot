@@ -853,7 +853,7 @@ async def zugzwang_clown(message: discord.Message) -> None:
                 return
             suffixes = (".png", ".jpg", ".jpeg")
             att = message.attachments[0]
-            if not (att.content_type and att.content_type.startswith("image/")) or (att.filename.lower().endswith(suffixes)):
+            if not ((att.content_type and att.content_type.startswith("image/")) or (att.filename.lower().endswith(suffixes))):
                 return
             else:
                 skip_message_checks = True
