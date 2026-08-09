@@ -62,5 +62,6 @@ zugzwang = {
     ],
     "replies": [
         "tenor.com/gif_1"
-    ]
+    ],
+    "only_channel": 1234567
 }

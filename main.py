@@ -28,6 +28,7 @@ import pytz
 import json
 from configs.amp_api_helper import get_amp_servers, send_reboot_server, send_set_zomboid_mods
 from typing import Optional
+from urllib.parse import urlparse
 
 DISCORD_MAX_MESSAGE_LEN = 2000
 LOG_DIR = "logs"
@@ -843,33 +844,54 @@ async def mention_spam_autoban(message: discord.Message) -> bool:
 
 async def zugzwang_clown(message: discord.Message) -> None:
     check_id = zugzwang.get("id")
+    check_channel = zugzwang.get("only_channel")
     if message.author.id != check_id:
         return
-    message_content = (message.content).strip().split()
+    if message.channel.id != check_channel:
+        return
+    message_content = (message.content).strip().lower()
+    message_words = message_content.split()
     skip_message_checks = False
+    suffixes = (".png", ".jpg", ".jpeg")
     if not message_content: # empty message with only file attached for example
         if message.attachments:
             if len(message.attachments) > 1:
                 return
-            suffixes = (".png", ".jpg", ".jpeg")
             att = message.attachments[0]
             if not ((att.content_type and att.content_type.startswith("image/")) or (att.filename.lower().endswith(suffixes))):
                 return
             else:
                 skip_message_checks = True
+    if not skip_message_checks and 'http' in message_content:
+        if len(message_words) > max_len:
+            return
+        url_start = message_content.find("http")
+        url = message_content[url_start:].split()[0]
+        parsed_url = urlparse(url)
+        if parsed_url.scheme in ("http", "https") and parsed_url.netloc:
+            hostname = parsed_url.hostname or ""
+            if hostname.endswith(("klipy.com", "tenor.com")):
+                return
+            if "discord" in hostname:
+                if any(suffix in parsed_url.path for suffix in suffixes):
+                    skip_message_checks = True
+                else:
+                    return
+            else:
+                return
     if not skip_message_checks:
-        if len(message_content) < 1: # explicit bot trigger checks
+        if len(message_words) < 1: # explicit bot trigger checks
             return
         max_len = zugzwang.get("word_limit")
-        if len(message_content) > max_len:
+        if len(message_words) > max_len:
             return
         prefixes = tuple(zugzwang.get("dictionary"))
-        if not any(s.startswith(prefixes) for s in message_content):
+        if not any(s.startswith(prefixes) for s in message_words):
             return
     selected_reply = random.choice(zugzwang.get("replies"))
     try:
         await message.reply(selected_reply, mention_author=False) # mention_author - means @username mention in the reply text
-        logger.info(f"Replied to zugzwang, word count: {len(message_content)}")
+        logger.info(f"Replied to zugzwang, word count: {len(message_words)}")
     except Exception as e1:
         logger.warning(f"Failed to reply to zugzwang first time: {e1}")
         try:
