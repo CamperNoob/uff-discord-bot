@@ -852,7 +852,7 @@ async def zugzwang_clown(message: discord.Message) -> None:
     message_content = (message.content).strip().lower()
     message_words = message_content.split()
     skip_message_checks = False
-    suffixes = (".png", ".jpg", ".jpeg")
+    suffixes = (".png", ".jpg", ".jpeg", ".mp4")
     if random.randint(1, 20) == 1:
         logger.info("Zugzwang hit a jackpot!")
         skip_message_checks = True
