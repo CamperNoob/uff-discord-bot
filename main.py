@@ -2019,12 +2019,13 @@ async def copy_category(interaction: discord.Interaction, category_from: discord
 @bot.tree.command(name="echo", description=f"{ECHO_DESCRIPTION}.")
 @discord.app_commands.describe(
     what=f"{ECHO_WHAT}.",
-    where=f"{ECHO_WHERE}."
+    where=f"{ECHO_WHERE}.",
+    reply=f"{ECHO_REPLY}"
 )
 @strict_has_any_role([1376229969813966888])
 @commands.guild_only()
-async def echo(interaction: discord.Interaction, what: str, where: discord.TextChannel):
-    logger.info(f"Received echo: {what}, {where.name}, from user: {interaction.user.name} <@{interaction.user.id}>")
+async def echo(interaction: discord.Interaction, what: str, where: discord.TextChannel, reply: str = None):
+    logger.info(f"Received echo: {what}, {where.name}, {reply}, from user: {interaction.user.name} <@{interaction.user.id}>")
     if interaction.user.id == 665907321519472672:
         await send_with_fallback(interaction, f"Ладос йди нахій.", ephemeral=False)
         logger.error(f"{ERROR_GENERIC}: LADDOS PIDOR; args: {what}, {where.name};")
@@ -2034,7 +2035,13 @@ async def echo(interaction: discord.Interaction, what: str, where: discord.TextC
         logger.error(f"{ERROR_GENERIC}: NO PERMS USER; args: {what}, {where.name};")
         return
     try:
-        await where.send(what)
+        reference = None
+        if reply:
+            reference = await fetch_message_from_url(interaction, reply)
+            if reference and message.channel.id != where.id:
+                await send_with_fallback(interaction, f"{ECHO_DIFFERENT_CHANNEL}.", ephemeral=True)
+                return
+        await where.send(what, reference = reference)
         await send_with_fallback(interaction, f"{ECHO_DONE}.", ephemeral=True)
     except discord.errors.Forbidden as e:
         await send_with_fallback(interaction, f"{GIF_ARCHIVE_BOT_NO_PERMISSIONS}.", ephemeral=True)

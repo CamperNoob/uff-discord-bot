@@ -178,6 +178,8 @@ ECHO_DESCRIPTION = "Send message as a bot."
 ECHO_WHAT = "Message"
 ECHO_WHERE = "Channel to send to"
 ECHO_DONE = "Done"
+ECHO_DIFFERENT_CHANNEL = "Reply message should be in the same channel"
+ECHO_REPLY = "Reply to this message (url)"
 
 DISCORD_TIMESTAMP_DESCRIPTION = "Returns a timestamp in discord format, which shows in local timezone of the user"
 DISCORD_TIMESTAMP_DATE = "Date in YYYY-MM-DD format (2025-01-01)"
