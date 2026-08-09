@@ -853,7 +853,10 @@ async def zugzwang_clown(message: discord.Message) -> None:
     message_words = message_content.split()
     skip_message_checks = False
     suffixes = (".png", ".jpg", ".jpeg")
-    if not message_content: # empty message with only file attached for example
+    if random.randint(1, 20) == 1:
+        logger.info("Zugzwang hit a jackpot!")
+        skip_message_checks = True
+    if not skip_message_checks and not message_content: # empty message with only file attached for example
         if message.attachments:
             if len(message.attachments) > 1:
                 return
