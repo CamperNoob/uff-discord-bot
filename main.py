@@ -875,13 +875,13 @@ async def zugzwang_clown(message: discord.Message) -> None:
             hostname = parsed_url.hostname or ""
             if hostname.endswith(("klipy.com", "tenor.com")):
                 return
-            if "discord" in hostname:
-                if any(suffix in parsed_url.path for suffix in suffixes):
-                    skip_message_checks = True
-                else:
-                    return
+            # if "discord" in hostname:
+            if any(suffix in parsed_url.path for suffix in suffixes):
+                skip_message_checks = True
             else:
                 return
+            # else:
+            #     return
     if not skip_message_checks:
         if len(message_words) < 1: # explicit bot trigger checks
             return
