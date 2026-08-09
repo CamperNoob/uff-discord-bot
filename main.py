@@ -2038,7 +2038,7 @@ async def echo(interaction: discord.Interaction, what: str, where: discord.TextC
         reference = None
         if reply:
             reference = await fetch_message_from_url(interaction, reply)
-            if reference and message.channel.id != where.id:
+            if reference and reference.channel.id != where.id:
                 await send_with_fallback(interaction, f"{ECHO_DIFFERENT_CHANNEL}.", ephemeral=True)
                 return
         await where.send(what, reference = reference)
