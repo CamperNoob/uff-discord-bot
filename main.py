@@ -845,6 +845,7 @@ async def mention_spam_autoban(message: discord.Message) -> bool:
 async def zugzwang_clown(message: discord.Message) -> None:
     check_id = zugzwang.get("id")
     check_channel = zugzwang.get("only_channel")
+    max_len = zugzwang.get("word_limit")
     if message.author.id != check_id:
         return
     if message.channel.id != check_channel:
@@ -853,6 +854,7 @@ async def zugzwang_clown(message: discord.Message) -> None:
     message_words = message_content.split()
     skip_message_checks = False
     suffixes = (".png", ".jpg", ".jpeg", ".mp4")
+    prefixes = tuple(zugzwang.get("dictionary"))
     if random.randint(1, 20) == 1:
         logger.info("Zugzwang hit a jackpot!")
         skip_message_checks = True
@@ -882,13 +884,20 @@ async def zugzwang_clown(message: discord.Message) -> None:
                 return
             # else:
             #     return
+    if not skip_message_checks and '||' in message_content:
+        skip_message_checks = True
+    if not skip_message_checks:
+        if ''.join([c[:1] for c in message_words]).startswith(prefixes):
+            skip_message_checks = True
+        if ''.join([c[:2] for c in message_words]).startswith(prefixes):
+            skip_message_checks = True
+        if ''.join([c[:3] for c in message_words]).startswith(prefixes):
+            skip_message_checks = True
     if not skip_message_checks:
         if len(message_words) < 1: # explicit bot trigger checks
             return
-        max_len = zugzwang.get("word_limit")
         if len(message_words) > max_len:
             return
-        prefixes = tuple(zugzwang.get("dictionary"))
         if not any(s.startswith(prefixes) for s in message_words):
             return
     selected_reply = random.choice(zugzwang.get("replies"))
