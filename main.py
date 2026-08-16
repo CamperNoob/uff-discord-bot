@@ -269,6 +269,13 @@ async def on_disconnect():
 @bot.event
 async def on_connect():
     logger.info("Bot connected to Discord websocket.")
+    global bot
+    await bot.change_presence(
+        activity=discord.Activity(
+            type=discord.ActivityType.watching,
+            name="zugzwang to send a gif"
+        )
+    )
 
 resume_counter = 0
 
