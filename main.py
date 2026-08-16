@@ -491,6 +491,26 @@ async def on_voice_state_update(member, before, after):
 #     await bot.process_commands(message)
 
 @bot.event
+async def on_message_edit(before: discord.Message, after: discord.Message):
+    if message.author == bot.user: # skip checking own messages entirely
+        await bot.process_commands(after)
+        return
+    
+    is_autoban = await honeypot_autoban(after)
+    if is_autoban: # if the message is relevant to autoban - do not try to do checks on gemini
+        await bot.process_commands(after)
+        return
+    
+    is_autoban = await mention_spam_autoban(after)
+    if is_autoban: # same check as before
+        await bot.process_commands(after)
+        return
+    
+    await zugzwang_clown(after)
+    await bot.process_commands(after)
+    return
+    
+@bot.event
 async def on_message(message: discord.Message):
     if message.author == bot.user: # skip checking own messages entirely
         await bot.process_commands(message)
