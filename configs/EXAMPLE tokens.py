@@ -78,7 +78,7 @@ discord_status = {
         "buttons": None, # A list of strings representing the labels of custom buttons shown in a rich presence.
         "details": None, # The detail of the user’s current activity.
         "details_url": None, # A URL that is linked to when clicking on the details text of the activity.
-        "emoji": None, # The emoji that belongs to this activity.
+        "_emoji_name": None, # The emoji that belongs to this activity. Swapped for 'emoji' param.
         "end": None, # When the user will stop doing this activity in UTC, if applicable.
         "large_image_text": None, # Returns the small image asset hover text of this activity, if applicable.
         "large_image_url": None, # Returns a URL pointing to the large image asset of this activity, if applicable.
