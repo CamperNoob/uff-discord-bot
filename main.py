@@ -13,7 +13,7 @@ from discord.ext import commands, tasks
 from logging.handlers import TimedRotatingFileHandler
 from collections import defaultdict
 from datetime import datetime, time, timedelta, timezone
-from configs.tokens import DiscordToken, Grafana, Servers, TempVoiceChannels, ApolloID as apollo_id, AutoBanChannels, AutoBanRoleBlacklist, zugzwang
+from configs.tokens import DiscordToken, Grafana, Servers, TempVoiceChannels, ApolloID as apollo_id, AutoBanChannels, AutoBanRoleBlacklist, zugzwang, discord_status
 from configs.seeding_messages_config import autopost_conf
 from configs.perms import unpack_conf, unpack_matching_conf, unpack_matching, strict_has_any_role
 from configs.gifs_command import get_gifs
@@ -270,11 +270,13 @@ async def on_disconnect():
 async def on_connect():
     logger.info("Bot connected to Discord websocket.")
     global bot
+    activity = discord_status.get("activity", {"type": discord.ActivityType.watching, "name": "gachimuchi"})
+    status = discord_status.get("status", discord.Status.online)
+    if status.get("emoji") is not None:
+        status["emoji"] = discord.utils.get(bot.emojis, name=status["emoji"])
     await bot.change_presence(
-        activity=discord.Activity(
-            type=discord.ActivityType.watching,
-            name="zugzwang to send a gif"
-        )
+        status=status,
+        activity=discord.Activity(**{key:value for key, value in activity.items() if value is not None})
     )
 
 resume_counter = 0
