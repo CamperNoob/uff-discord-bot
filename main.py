@@ -295,7 +295,7 @@ async def on_resumed():
 @bot.event
 async def on_ready():
     # debug
-    user = bot.get_user(281480977707040769)
+    user = guild.get_member(281480977707040769)
     for activity in user.activities:
         logger.info(activity)
         logger.info(f"name: {activity.name}")
