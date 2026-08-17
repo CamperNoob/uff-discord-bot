@@ -273,7 +273,7 @@ async def on_connect():
     activity = discord_status.get("activity", {"type": discord.ActivityType.watching, "name": "gachimuchi"})
     status = discord_status.get("status", discord.Status.online)
     if activity.get("_emoji_name") is not None:
-        activity["emoji"] = discord.utils.get(bot.emojis, name=activity["emoji"])
+        activity["emoji"] = discord.utils.get(bot.emojis, name=activity["_emoji_name"])
     await bot.change_presence(
         status=status,
         activity=discord.Activity(**{key:value for key, value in activity.items() if value is not None and not key.startswith("_")})
