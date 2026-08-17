@@ -297,11 +297,11 @@ async def on_ready():
     # debug
     guild_ = bot.get_guild(1120330571638382653)
     user = guild_.get_member(281480977707040769)
-    for activity in user.activities:
-        logger.info(activity)
-        logger.info(f"name: {activity.name}")
-        logger.info(f"type: {activity.type}")
-        logger.info(f'application_id: {getattr(activity, "application_id", None)}')
+    logger.info(user.name)
+    logger.info(user.activity)
+    logger.info(f"name: {user.activity.name}")
+    logger.info(f"type: {user.activity.type}")
+    logger.info(f'application_id: {getattr(user.activity, "application_id", None)}')
 
     global gemini
     logger.info(f'Logged in as {bot.user}')
