@@ -294,6 +294,14 @@ async def on_resumed():
 
 @bot.event
 async def on_ready():
+    # debug
+    user = bot.get_user(281480977707040769)
+    for activity in user.activities:
+        logger.info(activity)
+        logger.info(f"name: {activity.name}")
+        logger.info(f"type: {activity.type}")
+        logger.info(f'application_id: {getattr(activity, "application_id", None)}')
+
     global gemini
     logger.info(f'Logged in as {bot.user}')
     try:
