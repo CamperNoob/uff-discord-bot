@@ -515,7 +515,9 @@ async def on_message_edit(before: discord.Message, after: discord.Message):
         await bot.process_commands(after)
         return
     
-    await zugzwang_clown(after)
+    is_before = await zugzwang_clown(before)
+    if not is_before:
+        await zugzwang_clown(after)
     await bot.process_commands(after)
     return
     
@@ -871,15 +873,15 @@ async def mention_spam_autoban(message: discord.Message) -> bool:
                     return True
         return False # this part is triggered only if ban is not triggered and the whole list of mentions checked
 
-async def zugzwang_clown(message: discord.Message) -> None:
+async def zugzwang_clown(message: discord.Message) -> bool:
     check_id = zugzwang.get("id")
     check_channel = zugzwang.get("only_channel")
     max_len = zugzwang.get("word_limit")
     if message.author.id != check_id:
-        return
+        return False
     if message.channel.id != check_channel:
-        return
-    message_content = (message.content).strip().lower()
+        return False
+    message_content = (message.content).strip().lower().replace("*", "").replace("||", "").replace("__", "")
     message_words = message_content.split()
     skip_message_checks = False
     suffixes = (".png", ".jpg", ".jpeg", ".mp4")
@@ -890,31 +892,29 @@ async def zugzwang_clown(message: discord.Message) -> None:
     if not skip_message_checks and not message_content: # empty message with only file attached for example
         if message.attachments:
             if len(message.attachments) > 1:
-                return
+                return False
             att = message.attachments[0]
             if not ((att.content_type and att.content_type.startswith("image/")) or (att.filename.lower().endswith(suffixes))):
-                return
+                return False
             else:
                 skip_message_checks = True
     if not skip_message_checks and 'http' in message_content:
         if len(message_words) > max_len:
-            return
+            return False
         url_start = message_content.find("http")
         url = message_content[url_start:].split()[0]
         parsed_url = urlparse(url)
         if parsed_url.scheme in ("http", "https") and parsed_url.netloc:
             hostname = parsed_url.hostname or ""
             if hostname.endswith(("klipy.com", "tenor.com")):
-                return
+                return False
             # if "discord" in hostname:
             if any(suffix in parsed_url.path for suffix in suffixes):
                 skip_message_checks = True
             else:
-                return
+                return False
             # else:
             #     return
-    if not skip_message_checks and '||' in message_content:
-        skip_message_checks = True
     if not skip_message_checks:
         if ''.join([c[:1] for c in message_words]).startswith(prefixes):
             skip_message_checks = True
@@ -924,21 +924,23 @@ async def zugzwang_clown(message: discord.Message) -> None:
             skip_message_checks = True
     if not skip_message_checks:
         if len(message_words) < 1: # explicit bot trigger checks
-            return
+            return False
         if len(message_words) > max_len:
-            return
+            return False
         if not any(s.startswith(prefixes) for s in message_words):
-            return
+            return False
     selected_reply = random.choice(zugzwang.get("replies"))
     try:
         await message.reply(selected_reply, mention_author=False) # mention_author - means @username mention in the reply text
         logger.info(f"Replied to zugzwang, word count: {len(message_words)}")
+        return True
     except Exception as e1:
         logger.warning(f"Failed to reply to zugzwang first time: {e1}")
         try:
             await message.channel.send(f"<@{check_id}>\n{selected_reply}")
         except Exception as e2:
             logger.warning(f"Failed to reply to zugzwang second time: {e2}")
+        return False
 
 
 @bot.tree.command(name="missing_mentions", description=f"{MISSING_MENTIONS_COMMAND_DESCRIPTION}.")
